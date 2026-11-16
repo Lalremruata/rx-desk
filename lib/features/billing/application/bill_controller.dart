@@ -1,0 +1,458 @@
+import 'dart:async';
+
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:riverpod_annotation/riverpod_annotation.dart';
+
+import '../../../core/db/daos/sales_dao.dart';
+import '../../../core/db/models.dart';
+import '../../../core/money/gst.dart';
+import '../../../core/money/paise.dart';
+import '../../../core/sales/bill_rules.dart';
+import '../../../core/sales/credit_rules.dart';
+import '../../../core/utils/pack.dart';
+import '../../../core/widgets/widgets.dart';
+import '../../invoices/application/invoice_printer.dart';
+import '../../invoices/application/invoice_selection.dart';
+import '../../settings/application/app_settings.dart';
+import '../../settings/application/settings_providers.dart';
+import '../../staff/application/session.dart';
+import '../data/sales_repository.dart';
+import 'bill_state.dart';
+
+part 'bill_controller.g.dart';
+
+/// Result of trying to save the bill.
+sealed class SaveOutcome {
+  const SaveOutcome();
+}
+
+class BillSavedOutcome extends SaveOutcome {
+  const BillSavedOutcome(this.saved);
+  final SavedBill saved;
+}
+
+class BillRejected extends SaveOutcome {
+  const BillRejected(this.message);
+  final String message;
+}
+
+/// A Credit bill would go past the customer's limit; the Owner can allow it
+/// and the screen calls [BillController.save] again with the override.
+class CreditLimitBlocked extends SaveOutcome {
+  const CreditLimitBlocked(this.error);
+  final CreditLimitException error;
+}
+
+/// The bill being built at the counter (SPEC §5.2). Kept alive so switching
+/// screens doesn't lose it.
+@Riverpod(keepAlive: true)
+class BillController extends _$BillController {
+  Timer? _debounce;
+  int _searchSeq = 0;
+
+  static const Duration searchDebounce = Duration(milliseconds: 120);
+
+  @override
+  BillState build() {
+    ref.onDispose(() => _debounce?.cancel());
+    return BillState(payment: ref.read(settingsProvider).defaultPayment);
+  }
+
+  SalesRepository get _repo => ref.read(salesRepositoryProvider);
+  AppSettings get _settings => ref.read(settingsProvider);
+  void _toast(String m, {bool warn = false}) => ref.read(toastsProvider.notifier).show(m, warn: warn);
+
+  // ---------------------------------------------------------------------------
+  // Search
+
+  void setQuery(String q) {
+    state = state.copyWith(query: q, highlight: 0, drop: q.trim().isEmpty ? const DropClosed() : state.drop is DropResults ? state.drop : const DropClosed());
+    _debounce?.cancel();
+    if (q.trim().isEmpty) return;
+    _debounce = Timer(searchDebounce, runSearch);
+  }
+
+  /// Runs the search for the current query now (also used by Enter so a
+  /// scanner's fast input never waits on the debounce).
+  Future<SearchResults> runSearch() async {
+    _debounce?.cancel();
+    final q = state.query;
+    final seq = ++_searchSeq;
+    if (q.trim().isEmpty) return SearchResults.empty;
+    final r = await _repo.search(q, expiryWindowMonths: _settings.expiryWindowMonths);
+    if (seq == _searchSeq && ref.mounted && state.query == q) {
+      state = state.copyWith(drop: DropResults(r), highlight: 0);
+    }
+    return r;
+  }
+
+  int get _dropLength => switch (state.drop) {
+        DropResults(:final results) => results.rows.length,
+        DropBatchPicker(:final options) => options.length,
+        DropSubstitutes(:final substitutes) => substitutes.length,
+        DropClosed() => 0,
+      };
+
+  void moveHighlight(int delta) {
+    final n = _dropLength;
+    if (n == 0) return;
+    state = state.copyWith(highlight: (state.highlight + delta + n) % n);
+  }
+
+  void setHighlight(int i) {
+    if (i != state.highlight) state = state.copyWith(highlight: i);
+  }
+
+  /// Enter in the search box: picks the highlighted row (or the exact
+  /// barcode hit) in whatever the dropdown is showing.
+  Future<void> enter() async {
+    final drop = state.drop;
+    switch (drop) {
+      case DropBatchPicker(:final product, :final options):
+        if (state.highlight < options.length) _addLine(product, options[state.highlight]);
+      case DropSubstitutes(:final substitutes):
+        if (state.highlight < substitutes.length) await selectProduct(substitutes[state.highlight]);
+      case DropResults() || DropClosed():
+        if (state.query.trim().isEmpty) return;
+        final pending = _debounce?.isActive ?? false;
+        final results = pending || drop is DropClosed ? await runSearch() : (drop as DropResults).results;
+        if (results.rows.isEmpty) return;
+        final i = results.exactBarcode ? 0 : state.highlight.clamp(0, results.rows.length - 1);
+        await selectProduct(results.rows[i]);
+    }
+  }
+
+  /// Esc: closes the batch picker / substitutes, else clears the query.
+  void escape() {
+    if (state.drop is DropBatchPicker || state.drop is DropSubstitutes) {
+      state = state.copyWith(drop: const DropClosed(), highlight: 0);
+      if (state.query.trim().isNotEmpty) unawaited(runSearch());
+    } else {
+      _debounce?.cancel();
+      state = state.copyWith(query: '', drop: const DropClosed(), highlight: 0);
+    }
+  }
+
+  void closeDropdown() => state = state.copyWith(drop: const DropClosed(), highlight: 0);
+
+  // ---------------------------------------------------------------------------
+  // Picking (SPEC §4.3)
+
+  Future<void> selectProduct(StockRow p) async {
+    if (p.schedule == 'X') {
+      _toast('${p.name} is Schedule X — it can’t be sold from RxDesk', warn: true);
+      return;
+    }
+    if (p.isRx && !ref.read(canProvider(Permission.sellRx))) {
+      _toast('Your role can’t sell Schedule ${p.schedule} medicines', warn: true);
+      return;
+    }
+    final batches = await _repo.batchesOf(p.id);
+    final now = _repo.now;
+    final inBill = {for (final l in state.lines.where((l) => l.productId == p.id)) l.batchId: l.qty};
+    final pick = pickBatches(
+      [for (final b in batches) BatchOption(batchId: b.id, batchNo: b.batchNo, expiry: b.expiry, qty: b.qty)],
+      now,
+      inBill: inBill,
+    );
+    switch (pick) {
+      case AddDirect(:final batch):
+        _addLine(p, batch);
+      case ShowPicker(:final saleable, :final expired):
+        state = state.copyWith(drop: DropBatchPicker(p, saleable, expired), highlight: 0);
+      case ShowSubstitutes():
+        final subs = await _repo.substitutes(p.id);
+        state = state.copyWith(drop: DropSubstitutes(p, subs), highlight: 0);
+      case AllInBill():
+        _toast('All saleable units of ${p.name} are already in the bill', warn: true);
+    }
+  }
+
+  void pickBatch(BatchOption b) {
+    final drop = state.drop;
+    if (drop is DropBatchPicker) _addLine(drop.product, b);
+  }
+
+  void _addLine(StockRow p, BatchOption b) {
+    final lines = [...state.lines];
+    final key = '${p.id}|${b.batchId}';
+    final i = lines.indexWhere((l) => l.key == key);
+    if (i >= 0) {
+      final l = lines[i];
+      if (l.qty + l.step > l.maxQty && !_settings.allowNegativeStock) {
+        _toast('Only ${_left(l)} left in batch ${l.batchNo}', warn: true);
+        return;
+      }
+      lines[i] = l.copyWith(qty: l.qty + l.step);
+    } else {
+      // [b.qty] is what's left after units already in the bill.
+      final existing = state.qtyInBill(b.batchId);
+      final size = p.packSize < 1 ? 1 : p.packSize;
+      // Less than a strip left → start loose (SPEC §4.9).
+      final loose = size > 1 && b.qty < size && !_settings.allowNegativeStock;
+      lines.add(
+        BillLine(
+          productId: p.id,
+          batchId: b.batchId,
+          name: p.name,
+          salt: p.salt,
+          maker: p.maker,
+          schedule: p.schedule,
+          batchNo: b.batchNo,
+          expiry: b.expiry,
+          mrp: p.mrp,
+          gstRate: p.gstRate,
+          qty: loose ? 1 : size,
+          maxQty: b.qty + existing,
+          packSize: size,
+          category: p.category,
+          loose: loose,
+        ),
+      );
+    }
+    _debounce?.cancel();
+    state = state.copyWith(
+      lines: lines,
+      query: '',
+      drop: const DropClosed(),
+      highlight: 0,
+      lastAddedKey: key,
+      flashToken: state.flashToken + 1,
+      focusSearchToken: state.focusSearchToken + 1,
+    );
+  }
+
+  /// Quick-add chip: look the product up and pick it like a search result.
+  Future<void> quickAdd(int productId) async {
+    final rows = await _repo.stockRows([productId]);
+    if (rows.isNotEmpty) await selectProduct(rows.first);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Lines
+
+  String _left(BillLine l) => formatPackQty(l.maxQty, l.packSize, l.category);
+
+  /// Sets the qty field: [shown] packs, or loose units when the line is
+  /// loose. Capped at the batch (whole packs in Strip mode).
+  void setQty(String key, int shown) {
+    final i = state.lines.indexWhere((l) => l.key == key);
+    if (i < 0) return;
+    final l = state.lines[i];
+    var q = (shown < 1 ? 1 : shown) * l.step;
+    var loose = l.loose;
+    if (q > l.maxQty && !_settings.allowNegativeStock) {
+      q = l.maxQty ~/ l.step * l.step;
+      if (q == 0) {
+        // Not even one strip left: sell what's there loose.
+        q = l.maxQty;
+        loose = true;
+      }
+      _toast('Only ${_left(l)} left in batch ${l.batchNo}', warn: true);
+    }
+    if (q == l.qty && loose == l.loose) return;
+    final lines = [...state.lines]..[i] = l.copyWith(qty: q, loose: loose);
+    state = state.copyWith(lines: lines);
+  }
+
+  /// Strip / Tab switch on a line (SPEC §4.9). To Tab keeps the units
+  /// (1 strip → 10 tabs); to Strip rounds down to whole strips (at least 1).
+  void setLoose(String key, bool loose) {
+    final i = state.lines.indexWhere((l) => l.key == key);
+    if (i < 0) return;
+    final l = state.lines[i];
+    if (!l.sellsLoose || l.loose == loose) return;
+    var q = l.qty;
+    if (!loose) {
+      final most = _settings.allowNegativeStock ? 1 << 30 : l.maxQty ~/ l.packSize;
+      if (most < 1) {
+        _toast('Less than a ${l.nouns.pack} left in batch ${l.batchNo} — sell it loose', warn: true);
+        return;
+      }
+      q = (l.qty ~/ l.packSize).clamp(1, most) * l.packSize;
+    }
+    final lines = [...state.lines]..[i] = l.copyWith(qty: q, loose: loose);
+    state = state.copyWith(lines: lines);
+  }
+
+  void removeLine(String key) => state = state.copyWith(lines: state.lines.where((l) => l.key != key).toList());
+
+  // ---------------------------------------------------------------------------
+  // Details
+
+  void setCustomer(String v) => state = state.copyWith(customer: v);
+  void setPhone(String v) => state = state.copyWith(phone: v);
+  void setDoctor(String v) => state = state.copyWith(doctor: v);
+
+  void setDiscount(int pct) {
+    if (pct > BillRules.highDiscountThreshold && !ref.read(canProvider(Permission.giveHighDiscount))) {
+      _toast('Your role can’t give more than ${BillRules.highDiscountThreshold}% discount', warn: true);
+      return;
+    }
+    state = state.copyWith(discountPct: pct);
+  }
+
+  bool get _canCredit => ref.read(canProvider(Permission.sellOnCredit));
+
+  void setPayment(String m) {
+    if (m == creditMode && !_canCredit) {
+      _toast('Your role can’t sell on credit', warn: true);
+      return;
+    }
+    state = state.copyWith(payment: m);
+  }
+
+  /// F8: Cash → UPI → Card → Credit (Credit only with `sellOnCredit`).
+  void cyclePayment() {
+    final modes = [for (final m in billPaymentModes) if (m != creditMode || _canCredit) m];
+    final i = modes.indexOf(state.payment);
+    state = state.copyWith(payment: modes[(i + 1) % modes.length]);
+  }
+
+  void setPaidNow(String v) => state = state.copyWith(paidNow: v);
+  void setPaidNowMode(String m) => state = state.copyWith(paidNowMode: m);
+
+  void requestSearchFocus() => state = state.copyWith(focusSearchToken: state.focusSearchToken + 1);
+  void requestCustomerFocus() => state = state.copyWith(focusCustomerToken: state.focusCustomerToken + 1);
+
+  /// F2: start a fresh bill.
+  void newBill({bool announce = true}) {
+    _debounce?.cancel();
+    state = BillState(
+      payment: _settings.defaultPayment,
+      focusSearchToken: state.focusSearchToken + 1,
+      focusCustomerToken: state.focusCustomerToken,
+    );
+    if (announce) _toast('New bill started');
+  }
+
+  /// Keeps discount within a newly lowered maximum.
+  void clampDiscount(int max) {
+    if (state.discountPct > max) state = state.copyWith(discountPct: max);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Save (F10)
+
+  /// [overrideCreditLimit]: the Owner allowed going past the limit.
+  Future<SaveOutcome> save({bool overrideCreditLimit = false}) async {
+    if (state.saving) return const BillRejected('Already saving');
+    if (state.isEmpty) {
+      _toast('Add at least one item to the bill', warn: true);
+      return const BillRejected('Add at least one item to the bill');
+    }
+    final s = _settings;
+    if (state.hasRx && s.requireDoctorForRx && state.doctor.trim().isEmpty) {
+      const m = 'Schedule H item in bill — enter the prescribing doctor';
+      _toast(m, warn: true);
+      return const BillRejected(m);
+    }
+    if (state.isCredit && (state.customer.trim().isEmpty || state.phone.trim().isEmpty)) {
+      const m = 'Credit bill — enter the customer’s name and phone';
+      _toast(m, warn: true);
+      requestCustomerFocus();
+      return const BillRejected(m);
+    }
+    if (state.isCredit && state.paidNow.trim().isNotEmpty && Paise.tryParse(state.paidNow) == null) {
+      const m = 'Paid now isn’t an amount';
+      _toast(m, warn: true);
+      return const BillRejected(m);
+    }
+    final user = ref.read(sessionProvider);
+    state = state.copyWith(saving: true);
+    try {
+      final saved = await _repo.saveBill(
+        SaveBillRequest(
+          lines: [for (final l in state.lines) BillLineRequest(productId: l.productId, batchId: l.batchId, qty: l.qty)],
+          customerName: state.customer,
+          customerPhone: state.phone.trim().isEmpty ? null : state.phone.trim(),
+          doctorName: state.doctor.trim().isEmpty ? null : state.doctor.trim(),
+          paymentMode: state.payment,
+          discountPct: state.discountPct,
+          staffId: user?.staffId,
+          paidNow: state.paidNowPaise,
+          paidNowMode: state.paidNowMode,
+          overrideCreditLimit: overrideCreditLimit,
+        ),
+        s.billRules(role: user?.role ?? StaffRole.owner),
+      );
+      final copies = s.copies;
+      final credit = saved.duesAfter == null
+          ? ''
+          : ' · ${formatInr(saved.totals.total - state.paidNowPaise)} on credit · dues ${formatInr(saved.duesAfter!)}';
+      _toast(
+        '${saved.number} saved · ${formatInr(saved.totals.total)}$credit'
+        '${s.autoPrint ? ' · printing $copies ${copies == 1 ? 'copy' : 'copies'}' : ''}',
+      );
+      ref.read(selectedInvoiceProvider.notifier).select(saved.invoiceId);
+      newBill(announce: false);
+      if (s.autoPrint) unawaited(ref.read(invoicePrinterProvider).printSaved(saved.invoiceId, copies: copies));
+      return BillSavedOutcome(saved);
+    } on CreditLimitException catch (e) {
+      state = state.copyWith(saving: false);
+      return CreditLimitBlocked(e);
+    } on BillException catch (e) {
+      state = state.copyWith(saving: false);
+      _toast(e.message, warn: true);
+      return BillRejected(e.message);
+    }
+  }
+}
+
+/// Live totals for the current bill (SPEC §4.1).
+@riverpod
+BillTotals billTotals(Ref ref) {
+  final bill = ref.watch(billControllerProvider);
+  final s = ref.watch(settingsProvider);
+  return computeBill(
+    [
+      for (final l in bill.lines)
+        (
+          computeLine(
+            mrp: l.mrp,
+            qty: l.qty,
+            discountPct: bill.discountPct,
+            gstRate: l.gstRate,
+            gstRegistered: s.gstRegistered,
+            packSize: l.packSize,
+          ),
+          l.count,
+        ),
+    ],
+    roundOff: s.roundOff,
+  );
+}
+
+/// Discount chips allowed by settings (SPEC §4.6).
+@riverpod
+List<int> discountChips(Ref ref) => ref.watch(settingsProvider).billRules().discountChips;
+
+/// Next invoice number, for the Bill details header.
+@riverpod
+Future<String> nextInvoiceNumber(Ref ref) {
+  ref.watch(salesVersionProvider);
+  return ref.watch(salesRepositoryProvider).peekNextNumber(ref.watch(settingsProvider).numbering);
+}
+
+/// Bumps after every sale / cancel.
+@Riverpod(keepAlive: true)
+Stream<int> salesVersion(Ref ref) async* {
+  var n = 0;
+  yield n;
+  await for (final _ in ref.watch(salesRepositoryProvider).changes()) {
+    yield ++n;
+  }
+}
+
+/// Quick add: 8 most-sold items in the last 30 days.
+final quickAddProvider = FutureProvider.autoDispose<List<QuickAddItem>>((ref) {
+  ref.watch(salesVersionProvider);
+  return ref.watch(salesRepositoryProvider).topSellers();
+});
+
+/// Medicine count for "Searched N items in X ms".
+@riverpod
+Future<int> catalogueSize(Ref ref) {
+  ref.watch(salesVersionProvider);
+  return ref.watch(salesRepositoryProvider).productCount();
+}

@@ -1,0 +1,94 @@
+# Miscellaneous
+*.class
+*.log
+*.pyc
+*.swp
+.DS_Store
+.atom/
+.build/
+.buildlog/
+.history
+.svn/
+.swiftpm/
+migrate_working_dir/
+
+# IntelliJ related
+*.iml
+*.ipr
+*.iws
+.idea/
+
+# The .vscode folder contains launch configuration and tasks you configure in
+# VS Code which you may wish to be included in version control, so this line
+# is commented out by default.
+#.vscode/
+
+# Flutter/Dart/Pub related
+**/doc/api/
+**/ios/Flutter/.last_build_id
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.pub-cache/
+.pub/
+/build/
+
+# Symbolication related
+app.*.symbols
+
+# Obfuscation related
+app.*.map.json
+
+# Android Studio will place build artifacts here
+/android/app/debug
+/android/app/profile
+/android/app/release
+
+# Generated code (run build_runner after clone)
+*.g.dart
+*.freezed.dart
+
+# ─── Sensitive information — never commit ───────────────────────────────
+# Store data: real stockist names, phone numbers, MR names, sales figures.
+# Tests that read these skip themselves when the files are absent.
+/docs/*.xlsx
+*.xls
+*.xlsx
+*.csv
+
+# App database and backups (customers, dues, bills, staff PIN hashes)
+*.sqlite
+*.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm
+*.db
+*.rxbak
+
+# Exported invoices, statements and reports
+*.pdf
+
+# Signing keys and certificates (Android, Windows MSIX, Apple)
+key.properties
+*.keystore
+*.jks
+*.pfx
+*.p12
+*.pem
+*.key
+*.cer
+*.crt
+*.mobileprovision
+*.provisionprofile
+
+# Secrets and machine-local config
+.env
+.env.*
+!.env.example
+**/local.properties
+*.secret
+secrets/
+
+# OS / editor noise that can leak paths or usernames
+Thumbs.db
+desktop.ini
+.vscode/settings.json
