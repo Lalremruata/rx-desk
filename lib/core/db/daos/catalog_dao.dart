@@ -1,5 +1,6 @@
 import 'package:drift/drift.dart';
 
+import '../../inventory/stock_adjust.dart';
 import '../../money/paise.dart';
 import '../../utils/expiry.dart';
 import '../../utils/pack.dart';
@@ -96,17 +97,9 @@ class CatalogDao extends DatabaseAccessor<AppDatabase> with _$CatalogDaoMixin {
   /// (movement reason 'opening').
   Future<int> addProduct(NewProduct np, {required DateTime at, int? staffId}) {
     return transaction(() async {
-      if (np.name.trim().isEmpty) throw const CatalogException('Enter the medicine name');
-      if (!productCategories.contains(np.category)) throw CatalogException('Unknown category ${np.category}');
-      if (!drugSchedules.contains(np.schedule)) throw CatalogException('Unknown schedule ${np.schedule}');
-      if (!gstRates.contains(np.gstRate)) throw const CatalogException('GST rate must be 0, 5, 12 or 18 %');
-      if (np.mrp.value <= 0) throw const CatalogException('Enter the MRP');
+      _checkDetails(name: np.name, category: np.category, schedule: np.schedule, gstRate: np.gstRate, mrp: np.mrp);
       if (np.packSize < 1 || np.packSize > maxPackSize) throw const CatalogException('Units per pack must be 1–$maxPackSize');
-      final barcode = (np.barcode ?? '').trim();
-      if (barcode.isNotEmpty) {
-        final dupe = await (select(products)..where((p) => p.barcode.equals(barcode))).getSingleOrNull();
-        if (dupe != null) throw CatalogException('Barcode $barcode is already used by ${dupe.name}');
-      }
+      final barcode = await _freeBarcode(np.barcode);
       final mid = await manufacturerIdFor(np.maker);
       final ts = at.toUtc().millisecondsSinceEpoch;
       final pid = await into(products).insert(
@@ -145,6 +138,128 @@ class CatalogDao extends DatabaseAccessor<AppDatabase> with _$CatalogDaoMixin {
     });
   }
 
+  static void _checkDetails({
+    required String name,
+    required String category,
+    required String schedule,
+    required int gstRate,
+    required Paise mrp,
+  }) {
+    if (name.trim().isEmpty) throw const CatalogException('Enter the medicine name');
+    if (!productCategories.contains(category)) throw CatalogException('Unknown category $category');
+    if (!drugSchedules.contains(schedule)) throw CatalogException('Unknown schedule $schedule');
+    if (!gstRates.contains(gstRate)) throw const CatalogException('GST rate must be 0, 5, 12 or 18 %');
+    if (mrp.value <= 0) throw const CatalogException('Enter the MRP');
+  }
+
+  /// The trimmed barcode ('' = none), unless another product already uses it.
+  Future<String> _freeBarcode(String? raw, {int? exceptProductId}) async {
+    final barcode = (raw ?? '').trim();
+    if (barcode.isEmpty) return barcode;
+    final dupe = await (select(products)..where((p) => p.barcode.equals(barcode))).getSingleOrNull();
+    if (dupe != null && dupe.id != exceptProductId) throw CatalogException('Barcode $barcode is already used by ${dupe.name}');
+    return barcode;
+  }
+
+  /// Edits a medicine's details (SPEC §5.3). Past bills keep their
+  /// snapshots; new bills use the new MRP / GST / HSN. Units per pack is
+  /// changed with [setPackSize]. Search follows via the FTS update trigger.
+  Future<void> updateProduct(int productId, ProductEdit e, {required DateTime at}) {
+    return transaction(() async {
+      final p = await (select(products)..where((x) => x.id.equals(productId))).getSingleOrNull();
+      if (p == null) throw const CatalogException('Medicine not found');
+      _checkDetails(name: e.name, category: e.category, schedule: e.schedule, gstRate: e.gstRate, mrp: e.mrp);
+      if (e.reorderLevel < 0) throw const CatalogException('Reorder level can’t be negative');
+      final barcode = await _freeBarcode(e.barcode, exceptProductId: productId);
+      final mid = await manufacturerIdFor(e.maker);
+      await (update(products)..where((x) => x.id.equals(productId))).write(
+        ProductsCompanion(
+          name: Value(e.name.trim()),
+          salt: Value(e.salt.trim().isEmpty ? e.name.trim() : e.salt.trim()),
+          category: Value(e.category),
+          pack: Value(e.pack.trim().isEmpty ? 'Unit' : e.pack.trim()),
+          manufacturerId: Value(mid),
+          schedule: Value(e.schedule),
+          hsn: Value(e.hsn.trim()),
+          gstRate: Value(e.gstRate),
+          mrpPaise: Value(e.mrp.value),
+          reorderLevel: Value(e.reorderLevel),
+          rack: Value(e.rack.trim()),
+          barcode: Value(barcode.isEmpty ? null : barcode),
+          updatedAt: Value(at.toUtc().millisecondsSinceEpoch),
+        ),
+      );
+    });
+  }
+
+  /// Takes a medicine off sale (hidden from search, billing and inventory
+  /// views) or puts it back. Never deletes anything.
+  Future<void> setProductActive(int productId, bool active, {required DateTime at}) async {
+    final n = await (update(products)..where((x) => x.id.equals(productId))).write(
+      ProductsCompanion(isActive: Value(active), updatedAt: Value(at.toUtc().millisecondsSinceEpoch)),
+    );
+    if (n == 0) throw const CatalogException('Medicine not found');
+  }
+
+  /// Corrects a batch (SPEC §5.3): its number, its expiry and/or the
+  /// quantity counted on the shelf. An expired batch's expiry is locked
+  /// (rule 5). A quantity change needs a [reason] and writes an 'adjust'
+  /// movement with the note. One transaction.
+  Future<StockBatch> editBatch(
+    int batchId, {
+    String? batchNo,
+    String? expiry,
+    int? countedQty,
+    StockAdjustReason? reason,
+    String note = '',
+    required DateTime at,
+    int? staffId,
+  }) {
+    return transaction(() async {
+      final b = await (select(batches)..where((x) => x.id.equals(batchId))).getSingleOrNull();
+      if (b == null) throw const CatalogException('Batch not found');
+      final bno = batchNo?.trim().toUpperCase();
+      final changeNo = bno != null && bno != b.batchNo;
+      final changeExpiry = expiry != null && expiry != b.expiry;
+      final changeQty = countedQty != null && countedQty != b.qty;
+      if (!changeNo && !changeExpiry && !changeQty) throw const CatalogException('Nothing to change');
+
+      if (changeNo) {
+        if (bno.isEmpty) throw const CatalogException('Enter the batch number');
+        final clash = await (select(batches)
+              ..where((x) => x.productId.equals(b.productId) & x.batchNo.equals(bno) & x.id.equals(batchId).not()))
+            .getSingleOrNull();
+        if (clash != null) throw CatalogException('Batch $bno already exists for this medicine');
+      }
+      if (changeExpiry) {
+        if (!isValidExpiry(expiry)) throw const CatalogException('Expiry must be a month, e.g. 08/2027');
+        if (isExpired(b.expiry, at)) {
+          throw CatalogException('Batch ${b.batchNo} expired ${formatExpiry(b.expiry)} — its expiry can’t be changed');
+        }
+      }
+      if (changeQty) {
+        if (countedQty < 0) throw const CatalogException('Counted quantity can’t be negative');
+        if (reason == null) throw const CatalogException('Pick a reason for the stock correction');
+        if (reason.needsNote && note.trim().isEmpty) throw const CatalogException('Add a note saying why');
+      }
+
+      await (update(batches)..where((x) => x.id.equals(batchId))).write(
+        BatchesCompanion(
+          batchNo: changeNo ? Value(bno) : const Value.absent(),
+          expiry: changeExpiry ? Value(expiry) : const Value.absent(),
+          qty: changeQty ? Value(countedQty) : const Value.absent(),
+        ),
+      );
+      if (changeQty) {
+        await _movement(batchId, countedQty - b.qty, 'adjust',
+            at: at, staffId: staffId, refType: 'batch', refId: batchId, note: adjustNote(reason!, note));
+      }
+      await (update(products)..where((x) => x.id.equals(b.productId)))
+          .write(ProductsCompanion(updatedAt: Value(at.toUtc().millisecondsSinceEpoch)));
+      return (select(batches)..where((x) => x.id.equals(batchId))).getSingle();
+    });
+  }
+
   Future<void> _movement(
     int batchId,
     int delta,
@@ -153,6 +268,7 @@ class CatalogDao extends DatabaseAccessor<AppDatabase> with _$CatalogDaoMixin {
     int? staffId,
     String? refType,
     int? refId,
+    String note = '',
   }) =>
       into(stockMovements).insert(
         StockMovementsCompanion.insert(
@@ -163,6 +279,7 @@ class CatalogDao extends DatabaseAccessor<AppDatabase> with _$CatalogDaoMixin {
           refId: Value(refId),
           staffId: Value(staffId),
           at: at.toUtc().millisecondsSinceEpoch,
+          note: Value(note),
         ),
       );
 
@@ -267,6 +384,14 @@ class CatalogDao extends DatabaseAccessor<AppDatabase> with _$CatalogDaoMixin {
             ..where((m) => m.batchId.equals(batchId))
             ..orderBy([(m) => OrderingTerm.asc(m.at), (m) => OrderingTerm.asc(m.id)]))
           .get();
+
+  /// The batch's newest movements first (Edit batch history).
+  Stream<List<StockMovement>> watchRecentMovements(int batchId, {int limit = 5}) =>
+      (select(stockMovements)
+            ..where((m) => m.batchId.equals(batchId))
+            ..orderBy([(m) => OrderingTerm.desc(m.at), (m) => OrderingTerm.desc(m.id)])
+            ..limit(limit))
+          .watch();
 
   Future<StockRow?> stockRow(int productId, {required DateTime now, int expiryWindowMonths = 3}) async {
     final rows = await customSelect(
@@ -381,6 +506,7 @@ class CatalogDao extends DatabaseAccessor<AppDatabase> with _$CatalogDaoMixin {
         InventoryView.out => 'saleable <= 0',
         InventoryView.expiring => 'expiring > 0',
         InventoryView.dead => 'saleable > 0 AND COALESCE(last_sold_at, created_at) < ?3',
+        InventoryView.hidden => '1',
       };
 
   Future<InventoryCounts> inventoryCounts({
@@ -405,7 +531,8 @@ class CatalogDao extends DatabaseAccessor<AppDatabase> with _$CatalogDaoMixin {
         SUM(CASE WHEN saleable <= reorder_level * units_per_pack THEN 1 ELSE 0 END) AS low_n,
         SUM(CASE WHEN saleable <= 0 THEN 1 ELSE 0 END) AS out_n,
         SUM(CASE WHEN expiring > 0 THEN 1 ELSE 0 END) AS exp_n,
-        SUM(CASE WHEN saleable > 0 AND COALESCE(last_sold_at, created_at) < ?3 THEN 1 ELSE 0 END) AS dead_n
+        SUM(CASE WHEN saleable > 0 AND COALESCE(last_sold_at, created_at) < ?3 THEN 1 ELSE 0 END) AS dead_n,
+        (SELECT COUNT(*) FROM products WHERE is_active = 0) AS hidden_n
       FROM (SELECT $_stockCols $_from WHERE p.is_active = 1)
       ''',
       variables: [..._stockVars(now, expiryWindowMonths), Variable.withInt(_deadCutoff(now, deadStockDays))],
@@ -420,6 +547,7 @@ class CatalogDao extends DatabaseAccessor<AppDatabase> with _$CatalogDaoMixin {
       out: r.readNullable<int>('out_n') ?? 0,
       expiring: r.readNullable<int>('exp_n') ?? 0,
       dead: r.readNullable<int>('dead_n') ?? 0,
+      hidden: r.readNullable<int>('hidden_n') ?? 0,
     );
   }
 
@@ -438,7 +566,8 @@ class CatalogDao extends DatabaseAccessor<AppDatabase> with _$CatalogDaoMixin {
       Variable.withInt(_deadCutoff(now, deadStockDays)),
     ];
     // `?3 IS NOT NULL` keeps the dead-stock cutoff bound in every view.
-    final inner = StringBuffer('SELECT $_stockCols $_from WHERE p.is_active = 1 AND ?3 IS NOT NULL');
+    final active = q.view == InventoryView.hidden ? 0 : 1;
+    final inner = StringBuffer('SELECT $_stockCols $_from WHERE p.is_active = $active AND ?3 IS NOT NULL');
     final match = ftsQuery(q.search);
     if (match != null) {
       vars.add(Variable.withString(match));

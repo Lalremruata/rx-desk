@@ -194,6 +194,24 @@ void main() {
     expect(c.read(toastsTexts).last, startsWith('INV/26-27/00001 saved · ₹99.00 · printing 1 copy'));
   });
 
+  test('MRP edited while the bill is open: save is refused, the line shows the new MRP, the next save matches', () async {
+    await search('crocin');
+    await bill.enter();
+    expect(st().lines.single.mrp, const Paise(2500));
+    final db = c.read(appDatabaseProvider);
+    final pid = st().lines.single.productId;
+    await db.customStatement('UPDATE products SET mrp_paise = 2800 WHERE id = $pid');
+
+    final r = await bill.save();
+    expect(r, isA<BillRejected>());
+    expect(c.read(toastsTexts).last, contains('MRP of Crocin Advance is now ₹28.00'));
+    expect(st().lines.single.mrp, const Paise(2800));
+    expect(c.read(billTotalsProvider).total, const Paise(2800));
+
+    final ok = await bill.save();
+    expect((ok as BillSavedOutcome).saved.totals.total, const Paise(2800));
+  });
+
   test('default payment comes from settings after saving', () async {
     final c2 = await make(settings: const AppSettings(defaultPayment: 'UPI'));
     expect(c2.read(billControllerProvider).payment, 'UPI');

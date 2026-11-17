@@ -89,6 +89,19 @@ void main() {
         );
 
     test('valid bill passes', run);
+    test('MRP / GST edited while the bill was open → priceChanged with the current prices', () {
+      run(lines: const [BillLineRequest(productId: 1, batchId: 1, qty: 2, expectedMrp: Paise(1000), expectedGstRate: 12)]);
+      expect(
+        () => run(lines: const [BillLineRequest(productId: 1, batchId: 1, qty: 2, expectedMrp: Paise(900), expectedGstRate: 12)]),
+        throwsA(isA<PriceChangedException>()
+            .having((e) => e.changes[1], 'change', (mrp: const Paise(1000), gstRate: 12))
+            .having((e) => e.message, 'message', contains('MRP of Med is now ₹10.00'))),
+      );
+      expectError(
+        () => run(lines: const [BillLineRequest(productId: 1, batchId: 1, qty: 2, expectedMrp: Paise(1000), expectedGstRate: 5)]),
+        BillError.priceChanged,
+      );
+    });
     test('empty', () => expectError(() => run(lines: const []), BillError.empty));
     test('zero qty', () => expectError(() => run(lines: const [BillLineRequest(productId: 1, batchId: 1, qty: 0)]), BillError.invalidQty));
     test('expired batch can never be sold — even with negative stock allowed', () {

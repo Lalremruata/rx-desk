@@ -68,6 +68,8 @@ enum BillError {
   customerRequired,
   invalidPaidNow,
   overCreditLimit,
+  // Editable inventory (SPEC §5.3): MRP / GST changed while the bill was open.
+  priceChanged,
 }
 
 class BillException implements Exception {
@@ -78,6 +80,15 @@ class BillException implements Exception {
 
   @override
   String toString() => 'BillException($code): $message';
+}
+
+/// The MRP or GST rate of items in the bill was edited after they were
+/// added: what the counter showed is not what would be saved.
+class PriceChangedException extends BillException {
+  const PriceChangedException(this.changes, String message) : super(BillError.priceChanged, message);
+
+  /// productId → the current (MRP, GST rate).
+  final Map<int, ({Paise mrp, int gstRate})> changes;
 }
 
 /// Money changing hands at the counter: refunds, "paid now", dues payments.
@@ -91,12 +102,22 @@ const String creditMode = 'Credit';
 const List<String> billPaymentModes = [...paymentModes, creditMode];
 
 /// One requested line: [qty] units from batch [batchId] of [productId].
+/// [expectedMrp] / [expectedGstRate] are what the counter showed; when set
+/// they must still match the product (else [PriceChangedException]).
 class BillLineRequest {
-  const BillLineRequest({required this.productId, required this.batchId, required this.qty});
+  const BillLineRequest({
+    required this.productId,
+    required this.batchId,
+    required this.qty,
+    this.expectedMrp,
+    this.expectedGstRate,
+  });
 
   final int productId;
   final int batchId;
   final int qty;
+  final Paise? expectedMrp;
+  final int? expectedGstRate;
 }
 
 /// What a bill needs to know about a line's product + batch, loaded inside
@@ -153,6 +174,8 @@ void validateBill({
     );
   }
 
+  _checkPrices(lines, factsByBatch);
+
   final wanted = <int, int>{};
   var hasRx = false;
   for (final l in lines) {
@@ -193,6 +216,22 @@ void validateBill({
       }
     }
   }
+}
+
+void _checkPrices(List<BillLineRequest> lines, Map<int, LineFacts> factsByBatch) {
+  final changes = <int, ({Paise mrp, int gstRate})>{};
+  final names = <String>[];
+  for (final l in lines) {
+    final f = factsByBatch[l.batchId];
+    if (f == null || changes.containsKey(l.productId)) continue;
+    final mrpChanged = l.expectedMrp != null && l.expectedMrp != f.mrp;
+    final gstChanged = l.expectedGstRate != null && l.expectedGstRate != f.gstRate;
+    if (!mrpChanged && !gstChanged) continue;
+    changes[l.productId] = (mrp: f.mrp, gstRate: f.gstRate);
+    names.add(mrpChanged ? 'MRP of ${f.productName} is now ${formatInr(f.mrp)}' : 'GST of ${f.productName} is now ${f.gstRate}%');
+  }
+  if (changes.isEmpty) return;
+  throw PriceChangedException(changes, '${names.join('; ')} — bill updated, check the total and save again');
 }
 
 /// Line amounts for a bill, in line order.

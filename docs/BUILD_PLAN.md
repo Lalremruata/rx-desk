@@ -302,6 +302,22 @@ with EMY PHARMACY's two numbers and RB PAHRMACY's MR "Tluangtea", links catalogu
 or skips the rest and adds nothing on a second import; receiving an invoice lists the stockist
 under the medicine; register and directory pages stay under 50 ms on the perf seeds.
 
+## Phase 17 — Editable inventory
+
+**Prompt**
+
+> Build SPEC §4.13 / §5.3 editing: schema v9 (stock_movements.note) with migration + test; Edit
+> medicine (Add-medicine form without first batch / units per pack); Edit batch (batch no.,
+> expiry locked once expired, counted quantity with a reason → `adjust` movement with note,
+> recent movements); Hide / Unhide with a Hidden view; refuse saving a bill whose MRP / GST
+> changed after the items were added and refresh its lines.
+
+**Done when**: renaming a medicine keeps old bills' names and makes the new name searchable;
+an expired batch's expiry can't be changed but its quantity can be set to 0; a count correction
+shows "Damaged: …" in the batch's movements; a hidden medicine disappears from search, billing
+and counts and comes back from the Hidden tab; editing the MRP while it's on an open bill blocks
+the save once and the next save charges the new MRP.
+
 ### Manual release checklist
 
 - [ ] Fresh install → Owner setup → store profile → first bill printed on A4 and thermal
@@ -312,4 +328,6 @@ under the medicine; register and directory pages stay under 50 ms on the perf se
 - [ ] Register "GST summary by HSN" matches the sum of invoices for the month
 - [ ] Return 1 strip from a bill → credit note prints on A4 and thermal; stock +1
 - [ ] Set 10 tabs/strip on a medicine, sell 5 tabs by keyboard (T in qty), print on thermal
+- [ ] Edit a medicine's MRP while it's on an open bill → save refused once, new total, saves
+- [ ] Correct a batch's count with a reason; hide and unhide a medicine
 - [ ] Works with Windows display scaling 125 % and 150 %

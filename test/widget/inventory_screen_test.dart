@@ -116,4 +116,100 @@ void main() {
     expect(find.text('₹35.50'), findsWidgets);
     expect(find.byType(StatusBadge), findsWidgets);
   });
+
+  Future<void> typeIn(WidgetTester tester, String key, String v) =>
+      tester.enterText(find.descendant(of: find.byKey(ValueKey(key)), matching: find.byType(TextField)), v);
+
+  testWidgets('edit batch: counted stock with a reason updates the batch', (tester) async {
+    final c = await pumpApp(tester, size: const Size(1600, 1000), location: '/inventory', setUpDb: _seed);
+    await _run(tester);
+    await tester.tap(find.byTooltip('Show batches').last); // Paracetamol sorts last
+    await _run(tester);
+    await tester.tap(find.byKey(const ValueKey('edit-batch-PCM2611')));
+    await _run(tester);
+    expect(find.text('Edit batch PCM2611'), findsOneWidget);
+    expect(find.byKey(const ValueKey('edit-batch-history')), findsOneWidget);
+
+    await typeIn(tester, 'edit-batch-packs', '140');
+    await tester.pump();
+    expect(find.textContaining('Stock 142 → 140'), findsOneWidget);
+    await tester.ensureVisible(find.byKey(const ValueKey('edit-batch-save')));
+    await tester.tap(find.byKey(const ValueKey('edit-batch-save')));
+    await _run(tester, 200);
+    expect(find.text('Pick a reason'), findsOneWidget);
+
+    await tester.tap(find.text('Damaged'));
+    await tester.pump();
+    await tester.ensureVisible(find.byKey(const ValueKey('edit-batch-save')));
+    await tester.tap(find.byKey(const ValueKey('edit-batch-save')));
+    await _run(tester);
+    expect(c.read(toastsProvider).map((t) => t.text), contains('Batch PCM2611 updated · stock 142 → 140'));
+    final qty = tester.widget<Text>(find.byKey(const ValueKey('batch-qty-PCM2611')));
+    expect(qty.data, '140');
+  });
+
+  testWidgets('edit medicine: new MRP shows in the grid', (tester) async {
+    final c = await pumpApp(tester, size: const Size(1600, 1000), location: '/inventory', setUpDb: _seed);
+    await _run(tester);
+    await tester.tap(find.byTooltip('Show batches').last);
+    await _run(tester);
+    await tester.tap(find.text('Edit medicine'));
+    await _run(tester);
+    expect(find.text('Edit medicine'), findsWidgets);
+    expect(find.byKey(const ValueKey('add-batch')), findsNothing);
+    await typeIn(tester, 'add-mrp', '33.60');
+    await tester.pump();
+    expect(find.textContaining('applies to new bills only'), findsOneWidget);
+    await tester.ensureVisible(find.byKey(const ValueKey('save-medicine')));
+    await tester.tap(find.byKey(const ValueKey('save-medicine')));
+    await _run(tester);
+    expect(c.read(toastsProvider).map((t) => t.text), contains('Paracetamol 650 mg Tablet updated'));
+    expect(find.text('₹33.60'), findsWidgets);
+  });
+
+  testWidgets('hide a medicine, find it under Hidden, unhide it', (tester) async {
+    final c = await pumpApp(tester, size: const Size(1600, 1000), location: '/inventory', setUpDb: _seed);
+    await _run(tester);
+    expect(find.byKey(const ValueKey('view-hidden')), findsNothing);
+    await tester.tap(find.byTooltip('Show batches').last);
+    await _run(tester);
+    await tester.tap(find.text('Hide medicine'));
+    await _run(tester);
+    expect(find.text('Hide Paracetamol 650 mg Tablet?'), findsOneWidget);
+    await tester.tap(find.text('Hide'));
+    await _run(tester);
+    expect(c.read(toastsProvider).map((t) => t.text), contains('Paracetamol 650 mg Tablet hidden — find it under Hidden'));
+    expect(find.text('Paracetamol 650 mg Tablet'), findsNothing);
+    expect(find.text('1–3 of 3'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('view-hidden')));
+    await _run(tester);
+    expect(find.text('Paracetamol 650 mg Tablet'), findsOneWidget);
+    await tester.tap(find.text('Unhide'));
+    await _run(tester);
+    expect(c.read(toastsProvider).map((t) => t.text), contains('Paracetamol 650 mg Tablet is back on sale'));
+    await tester.tap(find.byKey(const ValueKey('view-all')));
+    await _run(tester);
+    expect(find.text('1–4 of 4'), findsOneWidget);
+  });
+
+  testWidgets('tablet portrait: batch panel, edit batch and edit medicine lay out without overflow', (tester) async {
+    await pumpApp(tester, size: const Size(800, 1280), location: '/inventory', setUpDb: _seed);
+    await _run(tester);
+    await tester.ensureVisible(find.byTooltip('Show batches').last);
+    await tester.tap(find.byTooltip('Show batches').last);
+    await _run(tester);
+    await tester.ensureVisible(find.byKey(const ValueKey('edit-batch-PCM2611')));
+    await tester.tap(find.byKey(const ValueKey('edit-batch-PCM2611')));
+    await _run(tester);
+    await typeIn(tester, 'edit-batch-packs', '1');
+    await tester.pump();
+    expect(find.text('Damaged'), findsOneWidget);
+    await tester.tap(find.text('Cancel'));
+    await _run(tester);
+    await tester.ensureVisible(find.text('Edit medicine'));
+    await tester.tap(find.text('Edit medicine'));
+    await _run(tester);
+    expect(find.byKey(const ValueKey('save-medicine')), findsOneWidget);
+  });
 }

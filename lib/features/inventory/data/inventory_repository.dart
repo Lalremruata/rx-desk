@@ -5,6 +5,7 @@ import '../../../core/db/app_database.dart';
 import '../../../core/db/daos/catalog_dao.dart';
 import '../../../core/db/db_provider.dart';
 import '../../../core/db/models.dart';
+import '../../../core/inventory/stock_adjust.dart';
 import '../../../core/money/paise.dart';
 
 part 'inventory_repository.g.dart';
@@ -48,6 +49,25 @@ class InventoryRepository {
 
   /// Packs per product (consumption register "Apply suggested").
   Future<int> setReorderLevels(Map<int, int> levels) => _dao.setReorderLevels(levels, at: _now());
+
+  Future<void> updateProduct(int productId, ProductEdit e) => _dao.updateProduct(productId, e, at: _now());
+
+  Future<void> setProductActive(int productId, bool active) => _dao.setProductActive(productId, active, at: _now());
+
+  Future<StockBatch> editBatch(
+    int batchId, {
+    String? batchNo,
+    String? expiry,
+    int? countedQty,
+    StockAdjustReason? reason,
+    String note = '',
+    int? staffId,
+  }) =>
+      _dao.editBatch(batchId,
+          batchNo: batchNo, expiry: expiry, countedQty: countedQty, reason: reason, note: note, at: _now(), staffId: staffId);
+
+  Stream<List<StockMovement>> watchRecentMovements(int batchId, {int limit = 5}) =>
+      _dao.watchRecentMovements(batchId, limit: limit);
 
   Future<void> setPackSize(int productId, int size, {int? staffId}) =>
       _dao.setPackSize(productId, size, at: _now(), staffId: staffId);

@@ -31,6 +31,8 @@ A pharmacist or cashier at the counter must be able to:
     invoices or imported from the store's "Damdawi lak na" sheet (§4.11, §5.9).
 12. See each month's day-by-day consumption per medicine with reorder level, minimum and buffer
     stock (the store's "Inventory Management Register"), and apply the reorder levels (§4.12).
+13. Correct the catalogue and stock: edit a medicine's details, fix a batch number or expiry, set
+    a batch to the counted quantity with a reason, and hide medicines no longer sold (§4.13, §5.3).
 
 Out of scope for v1: online sync, e-invoicing / IRN, sending orders to suppliers
 electronically, purchase GST input-credit reports, interest on late payment,
@@ -125,7 +127,7 @@ invoice_items  id PK, invoice_id FK, sale_date TEXT (denormalised), line_no,
 
 stock_movements id PK, batch_id FK, delta INT, reason ('sale'|'receive'|'adjust'|'return'|
                'cancel'|'restore'|'opening'|'supplier_return'|'write_off'|'repack'), ref_type, ref_id,
-               staff_id, at INT
+               staff_id, at INT, note TEXT DEFAULT '' (v9: stock-correction reason)
 
 daily_sales_summary  sale_date TEXT, product_id INT, units INT, bills INT, net_paise INT,
                tax_paise INT, PRIMARY KEY (sale_date, product_id)
@@ -178,6 +180,9 @@ suppliers          + other_phones TEXT ('' — "0389-2323442 / 9862958415"), + n
 product_sources    id PK, supplier_id FK, product_id FK NULL (NULL = name not in the catalogue),
                    item_name, mr_name, mr_phone, note, origin ('import'|'manual'|'receipt'),
                    last_received TEXT NULL, created_at, updated_at
+
+-- v9: editable inventory (§4.13)
+stock_movements    + note TEXT DEFAULT '' ("Damaged: 2 strips crushed")
 ```
 
 ### 3.2 Full-text search
@@ -476,6 +481,27 @@ net of returns, by day; current product names). For each medicine in a month:
 - Suggested reorder level (packs) = ⌈reorder level ÷ units_per_pack⌉. "Apply" (permission
   `changeStock`) sets `reorder_level` for the ticked medicines in one transaction.
 
+### 4.13 Editing inventory
+
+All of these need `changeStock` and run in one transaction each.
+- **Edit medicine**: every Add-medicine field except the first batch and units per pack (that
+  stays with "Sell loose…", §4.9). Same validation; the barcode may not belong to another
+  medicine. Saved bills keep their snapshots (rule 8); a new MRP / GST rate / HSN applies to new
+  bills only. Search follows the change (FTS triggers).
+- **Price changed during a bill**: each bill line sends the MRP and GST rate the counter showed.
+  If the medicine was edited since, saving is refused (`priceChanged`), the bill's lines take
+  the current MRP / GST, and the cashier checks the new total and saves again — the amount
+  collected always equals the amount saved.
+- **Edit batch**: batch number (upper-cased, unique per medicine), expiry, and the quantity
+  counted on the shelf. **An expired batch's expiry can't be changed** (rule 5: expired stock
+  can never be sold); its quantity can still be corrected (e.g. to 0 when disposed of).
+  A quantity change needs a reason — Count correction, Damaged, Lost / theft, Other (Other needs
+  a note) — and writes an `adjust` movement for the difference with `note` = "Reason[: note]".
+  The counted quantity is never negative, whatever `allowNegativeStock` says.
+- **Hide medicine** (`is_active = 0`): it leaves search, billing, the stock views, low-stock /
+  expiry counts and stock value; nothing is deleted. Inventory's **Hidden** view lists hidden
+  medicines with **Unhide**. Billing a hidden medicine is refused (`inactiveProduct`).
+
 ## 5. Screens
 
 Copy, layout and states follow the prototype. Highlights:
@@ -537,6 +563,13 @@ Layout: left 3/5 (search, quick add, bill grid, shortcut hints), right 2/5 "Bill
 - Dialogs: **Add medicine** (name, salt, maker, pack, category, schedule, barcode, first batch,
   expiry month, opening qty, reorder level, MRP incl. GST, GST rate, rack) and
   **Receive stock** (batch no — existing or new, expiry for new, qty, quick +10/25/50/100).
+- Editing (§4.13, permission `changeStock`): the expanded row has **Edit medicine** and
+  **Hide medicine** buttons and an edit icon on every batch row. **Edit batch** dialog: batch
+  no., expiry (locked with a note when expired), counted quantity (strips + loose tabs for
+  medicines sold loose), a "Stock 40 → 36 (−4)" preview, reason pills + note when the quantity
+  changes, and the batch's 5 most recent stock movements. Hiding asks for confirmation and says
+  how much stock remains. A **Hidden** tab (with count) appears once something is hidden; its
+  rows show a "Hidden" badge and **Unhide** in place of Receive.
 
 ### 5.4 Invoices
 

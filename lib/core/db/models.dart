@@ -71,7 +71,9 @@ abstract class StockRow with _$StockRow {
 }
 
 /// Inventory saved views (SPEC §5.3).
-enum InventoryView { all, low, expiring, out, dead }
+/// Saved inventory views; [hidden] lists medicines taken off sale
+/// (`is_active = 0`), every other view lists active ones only.
+enum InventoryView { all, low, expiring, out, dead, hidden }
 
 enum InventorySort { name, expiry, stock, mrp }
 
@@ -97,6 +99,7 @@ abstract class InventoryCounts with _$InventoryCounts {
     @Default(0) int expiring,
     @Default(0) int out,
     @Default(0) int dead,
+    @Default(0) int hidden,
   }) = _InventoryCounts;
 
   const InventoryCounts._();
@@ -107,6 +110,7 @@ abstract class InventoryCounts with _$InventoryCounts {
         InventoryView.expiring => expiring,
         InventoryView.out => out,
         InventoryView.dead => dead,
+        InventoryView.hidden => hidden,
       };
 }
 
@@ -161,6 +165,26 @@ abstract class NewProduct with _$NewProduct {
     String? expiry,
     @Default(0) int openingQty,
   }) = _NewProduct;
+}
+
+/// Edit-medicine form payload (SPEC §5.3). Units per pack is changed with
+/// the "Sell loose" action, not here.
+@freezed
+abstract class ProductEdit with _$ProductEdit {
+  const factory ProductEdit({
+    required String name,
+    @Default('') String salt,
+    required String maker,
+    @Default('') String pack,
+    required String category,
+    @Default('') String schedule,
+    String? barcode,
+    @Default('') String hsn,
+    required int gstRate,
+    required Paise mrp,
+    required int reorderLevel,
+    @Default('') String rack,
+  }) = _ProductEdit;
 }
 
 @freezed

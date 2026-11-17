@@ -7,6 +7,7 @@ import 'package:rx_desk/core/db/app_database.dart';
 import 'package:rx_desk/core/db/daos/purchases_dao.dart';
 import 'package:rx_desk/core/db/daos/sales_dao.dart';
 import 'package:rx_desk/core/db/migrations.dart';
+import 'package:rx_desk/core/inventory/stock_adjust.dart';
 import 'package:rx_desk/core/money/paise.dart';
 import 'package:rx_desk/core/sales/bill_rules.dart';
 import 'package:rx_desk/core/sales/return_rules.dart';
@@ -335,6 +336,22 @@ void main() {
     expect((src.single.origin, src.single.lastReceived), ('receipt', '2026-10-01'));
     final idx = await migrated.customSelect("SELECT name FROM sqlite_master WHERE type = 'index' AND name LIKE 'idx_sources%'").get();
     expect(idx, hasLength(3));
+  });
+
+  test('migration v8 → v9: stock movements get a note; old movements keep an empty note; corrections record theirs', () async {
+    final v8Path = '${dir.path}/v8.sqlite';
+    final db = fileDb(v8Path);
+    final (_, b) = await addMed(db, qty: 50);
+    await db.customStatement('ALTER TABLE stock_movements DROP COLUMN note');
+    await db.customStatement('PRAGMA user_version = 8');
+    await db.close();
+
+    final migrated = fileDb(v8Path);
+    addTearDown(migrated.close);
+    expect((await migrated.customSelect('PRAGMA user_version').getSingle()).read<int>('user_version'), latestSchemaVersion);
+    expect((await migrated.catalogDao.movementsOf(b)).single.note, '');
+    await migrated.catalogDao.editBatch(b, countedQty: 48, reason: StockAdjustReason.lost, at: t0);
+    expect((await migrated.catalogDao.movementsOf(b)).last.note, 'Lost / theft');
   });
 }
 

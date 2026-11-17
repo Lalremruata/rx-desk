@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:rx_desk/core/db/app_database.dart';
 import 'package:rx_desk/core/db/models.dart';
+import 'package:rx_desk/core/inventory/stock_adjust.dart';
 import 'package:rx_desk/core/money/paise.dart';
 import 'package:rx_desk/core/theme/tokens.dart';
 import 'package:rx_desk/features/inventory/application/inventory_rules.dart';
@@ -91,5 +92,15 @@ void main() {
     final lines = csv.trim().split('\n');
     expect(lines.first, startsWith('Medicine,Salt,Pack,Maker'));
     expect(lines[1], startsWith('"Med, ""Special""",Salt,Strip,Maker,Tablet,,Feb 2027,50,20,30.90,12,3004,A1,,In stock'));
+  });
+
+  test('movement labels and stock-correction notes', () {
+    expect(movementLabel('adjust'), 'Corrected');
+    expect(movementLabel('supplier_return'), 'Returned to stockist');
+    expect(movementLabel('mystery'), 'mystery');
+    expect(adjustNote(StockAdjustReason.damaged, '  '), 'Damaged');
+    expect(adjustNote(StockAdjustReason.other, ' fell behind rack '), 'Other: fell behind rack');
+    expect(StockAdjustReason.other.needsNote, isTrue);
+    expect(StockAdjustReason.count.needsNote, isFalse);
   });
 }

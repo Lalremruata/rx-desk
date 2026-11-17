@@ -10,7 +10,7 @@ desktop first, Android tablet second. No network calls.
 
 ## Status
 
-All BUILD_PLAN phases (0–16, incl. Purchases / order book, stockist dues, sales returns / credit notes, loose selling, customer credit / udhaar, the stockist directory and the monthly consumption register) are implemented with tests. Still to verify on real
+All BUILD_PLAN phases (0–17, incl. Purchases / order book, stockist dues, sales returns / credit notes, loose selling, customer credit / udhaar, the stockist directory, the monthly consumption register and editable inventory) are implemented with tests. Still to verify on real
 hardware: Windows build + printer driver, Android tablet, barcode scanner, and the
 manual release checklist at the end of `docs/BUILD_PLAN.md`.
 

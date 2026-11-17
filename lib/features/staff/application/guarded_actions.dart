@@ -2,12 +2,14 @@ import 'dart:typed_data';
 
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
+import '../../../core/db/app_database.dart';
 import '../../../core/db/daos/customers_dao.dart';
 import '../../../core/db/daos/dues_dao.dart';
 import '../../../core/db/daos/purchases_dao.dart';
 import '../../../core/db/daos/sales_dao.dart';
 import '../../../core/db/daos/sources_dao.dart';
 import '../../../core/db/models.dart';
+import '../../../core/inventory/stock_adjust.dart';
 import '../../../core/money/paise.dart';
 import '../../../core/sales/return_rules.dart';
 import '../../backup/application/backup_format.dart';
@@ -46,6 +48,32 @@ class GuardedActions {
   Future<int> setReorderLevels(Map<int, int> levels) {
     requirePermission(_ref, Permission.changeStock);
     return _ref.read(inventoryRepositoryProvider).setReorderLevels(levels);
+  }
+
+  /// Edit medicine (SPEC §5.3).
+  Future<void> updateMedicine(int productId, ProductEdit e) {
+    requirePermission(_ref, Permission.changeStock);
+    return _ref.read(inventoryRepositoryProvider).updateProduct(productId, e);
+  }
+
+  /// Hide (take off sale) or unhide a medicine.
+  Future<void> setMedicineHidden(int productId, bool hidden) {
+    requirePermission(_ref, Permission.changeStock);
+    return _ref.read(inventoryRepositoryProvider).setProductActive(productId, !hidden);
+  }
+
+  /// Edit batch: number, expiry, counted quantity with a reason.
+  Future<StockBatch> editBatch(
+    int batchId, {
+    String? batchNo,
+    String? expiry,
+    int? countedQty,
+    StockAdjustReason? reason,
+    String note = '',
+  }) {
+    requirePermission(_ref, Permission.changeStock);
+    return _ref.read(inventoryRepositoryProvider).editBatch(batchId,
+        batchNo: batchNo, expiry: expiry, countedQty: countedQty, reason: reason, note: note, staffId: _staffId);
   }
 
   Future<void> setPackSize(int productId, int size) {

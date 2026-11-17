@@ -45,6 +45,7 @@ class ExpandedProducts extends _$ExpandedProducts {
 
   void toggle(int id) => state = state.contains(id) ? ({...state}..remove(id)) : {...state, id};
   void open(int id) => state = {...state, id};
+  void close(int id) => state = {...state}..remove(id);
 }
 
 /// Bumps whenever products / batches change, so views refresh after a
@@ -87,4 +88,9 @@ final productBatchesProvider = FutureProvider.autoDispose.family<List<StockBatch
 
 final makersProvider = StreamProvider.autoDispose<List<Manufacturer>>(
   (ref) => ref.watch(inventoryRepositoryProvider).watchMakers(),
+);
+
+/// The newest stock movements of one batch (Edit batch history).
+final batchMovementsProvider = StreamProvider.autoDispose.family<List<StockMovement>, int>(
+  (ref, batchId) => ref.watch(inventoryRepositoryProvider).watchRecentMovements(batchId),
 );

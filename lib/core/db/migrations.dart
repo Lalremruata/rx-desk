@@ -7,7 +7,7 @@ import 'fts.dart';
 
 /// Current schema version. Every bump needs a step in [_steps] and a test in
 /// test/dao/migration_test.dart (CLAUDE.md rule 10).
-const int latestSchemaVersion = 8;
+const int latestSchemaVersion = 9;
 
 /// `_steps[v]` migrates schema v → v + 1.
 final Map<int, Future<void> Function(AppDatabase db, Migrator m)> _steps = {
@@ -101,6 +101,10 @@ final Map<int, Future<void> Function(AppDatabase db, Migrator m)> _steps = {
       SELECT r.supplier_id, l.product_id, p.name, 'receipt', MAX(r.received_date), MAX(r.created_at), MAX(r.created_at)
       FROM receipt_lines l JOIN purchase_receipts r ON r.id = l.receipt_id JOIN products p ON p.id = l.product_id
       GROUP BY r.supplier_id, l.product_id''');
+  },
+  // v8 → v9: editable inventory (SPEC §5.3) — reason note on stock corrections.
+  8: (db, m) async {
+    if (!await _hasColumn(db, 'stock_movements', 'note')) await m.addColumn(db.stockMovements, db.stockMovements.note);
   },
 };
 

@@ -207,6 +207,9 @@ class StockMovements extends Table {
   IntColumn get refId => integer().nullable()();
   IntColumn get staffId => integer().nullable()();
   IntColumn get at => integer()();
+
+  /// v9: why a manual correction was made — "Damaged: 2 strips broken".
+  TextColumn get note => text().withDefault(const Constant(''))();
 }
 
 @DataClassName('DailySale')

@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/db/app_database.dart';
+import '../../../core/db/daos/catalog_dao.dart';
 import '../../../core/db/db_provider.dart';
 import '../../../core/db/models.dart';
 import '../../../core/money/paise.dart';
@@ -20,6 +21,7 @@ import '../../../core/widgets/widgets.dart';
 import '../../purchases/application/purchases_providers.dart';
 import '../../settings/application/app_settings.dart';
 import '../../settings/application/settings_providers.dart';
+import '../../staff/application/guarded_actions.dart';
 import '../../staff/application/session.dart';
 import '../application/inventory_providers.dart';
 import '../application/inventory_rules.dart';
@@ -56,7 +58,13 @@ class _ViewTabs extends ConsumerWidget {
           InventoryView.expiring => 'Expiring ≤ ${days}d',
           InventoryView.out => 'Out of stock',
           InventoryView.dead => 'Dead stock',
+          InventoryView.hidden => 'Hidden',
         };
+    // Hidden appears once something has been hidden.
+    final views = [
+      for (final v in InventoryView.values)
+        if (v != InventoryView.hidden || counts.hidden > 0 || q.view == InventoryView.hidden) v,
+    ];
     return Container(
       decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: AppColors.chipBorder))),
       child: SingleChildScrollView(
@@ -66,7 +74,7 @@ class _ViewTabs extends ConsumerWidget {
           label: 'Saved views',
           child: Row(
             children: [
-              for (final v in InventoryView.values)
+              for (final v in views)
                 Semantics(
                   selected: q.view == v,
                   button: true,
@@ -227,6 +235,7 @@ class _Grid extends ConsumerWidget {
     final now = ref.watch(nowProvider)();
     final canEdit = ref.watch(canProvider(Permission.changeStock));
     final rows = page?.rows ?? const <StockRow>[];
+    final hiddenView = q.view == InventoryView.hidden;
 
     return AppCard(
       padding: EdgeInsets.zero,
@@ -246,7 +255,8 @@ class _Grid extends ConsumerWidget {
                 ? const SizedBox(height: 120)
                 : const EmptyState(title: 'No medicines match', message: 'Try a salt name or barcode, or clear the filters.'),
             belowRow: (context, i) => expanded.contains(rows[i].id) ? _BatchPanel(row: rows[i]) : null,
-            cells: (context, i) => _cells(context, ref, rows[i], expanded.contains(rows[i].id), now, s.expiryWindowMonths, s.deadStockDays, canEdit),
+            cells: (context, i) =>
+                _cells(context, ref, rows[i], expanded.contains(rows[i].id), now, s.expiryWindowMonths, s.deadStockDays, canEdit, hiddenView),
           ),
           const Divider(),
           Pager(
@@ -271,6 +281,7 @@ class _Grid extends ConsumerWidget {
     int window,
     int deadDays,
     bool canEdit,
+    bool hiddenView,
   ) {
     final p = context.palette;
     final exp = r.displayExpiry;
@@ -324,13 +335,20 @@ class _Grid extends ConsumerWidget {
       ),
       Text(formatInr(r.mrp), style: AppType.bodyStrong.copyWith(fontFeatures: AppType.tabular)),
       Text(r.rack.isEmpty ? '—' : r.rack, style: AppType.small.copyWith(color: AppColors.body)),
-      StatusBadge(status, tone: tone),
-      AppButton.secondary(
-        key: ValueKey('receive-${r.id}'),
-        label: 'Receive',
-        height: 36,
-        onPressed: canEdit ? () => showReceiveDialog(context, product: r) : null,
-      ),
+      hiddenView ? const StatusBadge('Hidden') : StatusBadge(status, tone: tone),
+      hiddenView
+          ? AppButton.secondary(
+              key: ValueKey('unhide-${r.id}'),
+              label: 'Unhide',
+              height: 36,
+              onPressed: canEdit ? () => setMedicineHidden(context, ref, r, hidden: false) : null,
+            )
+          : AppButton.secondary(
+              key: ValueKey('receive-${r.id}'),
+              label: 'Receive',
+              height: 36,
+              onPressed: canEdit ? () => showReceiveDialog(context, product: r) : null,
+            ),
     ];
   }
 }
@@ -390,6 +408,8 @@ class _BatchPanel extends ConsumerWidget {
     final now = ref.watch(nowProvider)();
     final window = ref.watch(settingsProvider.select((s) => s.expiryWindowMonths));
     final fefo = batches == null ? null : fefoBatchId(batches, now);
+    final canEdit = ref.watch(canProvider(Permission.changeStock));
+    final hidden = ref.watch(inventoryFilterProvider.select((q) => q.view == InventoryView.hidden));
 
     Widget head(String t, {bool end = false}) =>
         Text(t, textAlign: end ? TextAlign.right : TextAlign.left, style: AppType.overline.copyWith(letterSpacing: 0.4));
@@ -429,13 +449,14 @@ class _BatchPanel extends ConsumerWidget {
                           SizedBox(width: 90, child: head('MRP', end: true)),
                           const SizedBox(width: 12),
                           Expanded(child: head('NOTE')),
+                          if (canEdit) const SizedBox(width: _editButtonWidth),
                         ],
                       ),
                     ),
                     if (batches == null)
                       const Padding(padding: EdgeInsets.all(12), child: LinearProgressIndicator(minHeight: 2))
                     else
-                      for (final b in batches) _batchRow(b, now, window, fefo),
+                      for (final b in batches) _batchRow(context, b, now, window, fefo, canEdit),
                   ],
                 ),
               ),
@@ -464,6 +485,30 @@ class _BatchPanel extends ConsumerWidget {
                 Text('Last sold ${lastSoldLabel(row.lastSoldAt, now)}', style: AppType.caption),
               ],
             ),
+            if (canEdit)
+              Padding(
+                padding: const EdgeInsets.only(top: AppSpace.sm),
+                child: Wrap(
+                  spacing: AppSpace.sm,
+                  runSpacing: AppSpace.sm,
+                  children: [
+                    AppButton.secondary(
+                      key: ValueKey('edit-medicine-${row.id}'),
+                      label: 'Edit medicine',
+                      icon: Icons.edit_outlined,
+                      height: 36,
+                      onPressed: () => showEditMedicineDialog(context, product: row),
+                    ),
+                    AppButton.secondary(
+                      key: ValueKey('${hidden ? 'unhide' : 'hide'}-medicine-${row.id}'),
+                      label: hidden ? 'Unhide medicine' : 'Hide medicine',
+                      icon: hidden ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                      height: 36,
+                      onPressed: () => setMedicineHidden(context, ref, row, hidden: !hidden),
+                    ),
+                  ],
+                ),
+              ),
             _GetFrom(productId: row.id),
           ],
         ),
@@ -471,7 +516,9 @@ class _BatchPanel extends ConsumerWidget {
     );
   }
 
-  Widget _batchRow(StockBatch b, DateTime now, int window, int? fefo) {
+  static const double _editButtonWidth = 48;
+
+  Widget _batchRow(BuildContext context, StockBatch b, DateTime now, int window, int? fefo, bool canEdit) {
     final (note, tone) = batchNote(b, fefoBatchId: fefo, now: now, expiryWindowMonths: window);
     final level = expiryLevel(b.expiry, now, window);
     return Container(
@@ -505,6 +552,16 @@ class _BatchPanel extends ConsumerWidget {
           SizedBox(width: 90, child: Text(formatInr(Paise(row.mrp.value)), textAlign: TextAlign.right, style: AppType.small)),
           const SizedBox(width: 12),
           Expanded(child: Align(alignment: Alignment.centerLeft, child: StatusBadge.tag(note, tone: tone))),
+          if (canEdit)
+            SizedBox(
+              width: _editButtonWidth,
+              child: IconButton(
+                key: ValueKey('edit-batch-${b.batchNo}'),
+                tooltip: 'Edit batch ${b.batchNo} — number, expiry, counted stock',
+                onPressed: () => showEditBatchDialog(context, product: row, batch: b),
+                icon: const Icon(Icons.edit_outlined, size: 18),
+              ),
+            ),
         ],
       ),
     );
@@ -543,6 +600,32 @@ class _GetFrom extends ConsumerWidget {
         ],
       ),
     );
+  }
+}
+
+/// Hides a medicine (after confirming) or brings it back (SPEC §5.3).
+Future<void> setMedicineHidden(BuildContext context, WidgetRef ref, StockRow row, {required bool hidden}) async {
+  if (hidden) {
+    final stock = row.saleable > 0 ? ' It still has ${formatPackQty(row.saleable, row.packSize, row.category)} in stock.' : '';
+    final ok = await showConfirmDialog(
+      context,
+      title: 'Hide ${row.name}?',
+      message: 'It leaves search, billing and the stock views.$stock Nothing is deleted — '
+          'bring it back from Inventory › Hidden.',
+      confirmLabel: 'Hide',
+      icon: Icons.visibility_off_outlined,
+    );
+    if (!ok) return;
+  }
+  final toasts = ref.read(toastsProvider.notifier);
+  try {
+    await ref.read(guardedActionsProvider).setMedicineHidden(row.id, hidden);
+    if (hidden) ref.read(expandedProductsProvider.notifier).close(row.id);
+    toasts.show(hidden ? '${row.name} hidden — find it under Hidden' : '${row.name} is back on sale');
+  } on CatalogException catch (e) {
+    toasts.show(e.message, warn: true);
+  } on PermissionDenied catch (e) {
+    toasts.show('$e', warn: true);
   }
 }
 

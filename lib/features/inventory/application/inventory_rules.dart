@@ -66,6 +66,21 @@ String lastSoldLabel(int? lastSoldAt, DateTime now) {
   return '$days days ago';
 }
 
+/// Plain words for a stock movement's reason (Edit batch history).
+String movementLabel(String reason) => switch (reason) {
+      'sale' => 'Sold',
+      'receive' => 'Received',
+      'opening' => 'Opening stock',
+      'adjust' => 'Corrected',
+      'return' => 'Customer return',
+      'cancel' => 'Bill cancelled',
+      'restore' => 'Restored',
+      'supplier_return' => 'Returned to stockist',
+      'write_off' => 'Written off',
+      'repack' => 'Pack size changed',
+      _ => reason,
+    };
+
 /// Parses "MM/YYYY", "MM/YY", "MM-YYYY" or "YYYY-MM" into 'YYYY-MM'.
 String? parseExpiryInput(String input) {
   final s = input.trim();

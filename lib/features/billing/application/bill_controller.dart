@@ -363,7 +363,10 @@ class BillController extends _$BillController {
     try {
       final saved = await _repo.saveBill(
         SaveBillRequest(
-          lines: [for (final l in state.lines) BillLineRequest(productId: l.productId, batchId: l.batchId, qty: l.qty)],
+          lines: [
+            for (final l in state.lines)
+              BillLineRequest(productId: l.productId, batchId: l.batchId, qty: l.qty, expectedMrp: l.mrp, expectedGstRate: l.gstRate),
+          ],
           customerName: state.customer,
           customerPhone: state.phone.trim().isEmpty ? null : state.phone.trim(),
           doctorName: state.doctor.trim().isEmpty ? null : state.doctor.trim(),
@@ -391,6 +394,17 @@ class BillController extends _$BillController {
     } on CreditLimitException catch (e) {
       state = state.copyWith(saving: false);
       return CreditLimitBlocked(e);
+    } on PriceChangedException catch (e) {
+      // Show the current prices so the next save matches what's on screen.
+      state = state.copyWith(
+        saving: false,
+        lines: [
+          for (final l in state.lines)
+            if (e.changes[l.productId] case final c?) l.copyWith(mrp: c.mrp, gstRate: c.gstRate) else l,
+        ],
+      );
+      _toast(e.message, warn: true);
+      return BillRejected(e.message);
     } on BillException catch (e) {
       state = state.copyWith(saving: false);
       _toast(e.message, warn: true);
