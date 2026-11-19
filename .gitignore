@@ -92,3 +92,6 @@ secrets/
 Thumbs.db
 desktop.ini
 .vscode/settings.json
+
+# Local secrets
+google_oauth.json
