@@ -17,6 +17,7 @@ import '../../staff/application/guarded_actions.dart';
 import '../../staff/application/session.dart';
 import '../application/inventory_providers.dart';
 import '../application/inventory_rules.dart';
+import '../data/inventory_repository.dart';
 
 /// Resolves to the new product's id, or null if cancelled.
 Future<int?> showAddMedicineDialog(BuildContext context, {String initialName = '', bool showInInventory = true}) => showAppDialog<int>(
@@ -112,6 +113,32 @@ class _AddMedicineDialogState extends ConsumerState<AddMedicineDialog> {
   }
   Map<String, String> errors = const {};
   bool saving = false;
+  final _nameFocus = FocusNode();
+
+  @override
+  void dispose() {
+    _nameFocus.dispose();
+    super.dispose();
+  }
+
+  /// Same names are allowed (one brand, several compositions) but the
+  /// user confirms. Checked when adding, or when an edit changes the name.
+  Future<bool> _confirmSameName() async {
+    final n = name.trim();
+    if (_e case final p? when p.name.trim().toLowerCase() == n.toLowerCase()) return true;
+    final matches = await ref.read(inventoryRepositoryProvider).productsNamed(n, exceptProductId: _e?.id);
+    final msg = sameNameWarning(n, salt, matches);
+    if (msg == null || !mounted) return true;
+    final ok = await showConfirmDialog(
+      context,
+      title: 'Medicine name already exists',
+      message: msg,
+      confirmLabel: 'Save anyway',
+      icon: Icons.content_copy_rounded,
+    );
+    if (!ok) _nameFocus.requestFocus();
+    return ok;
+  }
 
   Map<String, String> _validate() => {
         if (name.trim().isEmpty) 'name': 'Enter the medicine name',
@@ -129,6 +156,10 @@ class _AddMedicineDialogState extends ConsumerState<AddMedicineDialog> {
     setState(() => errors = e);
     if (e.isNotEmpty) return;
     setState(() => saving = true);
+    if (!await _confirmSameName()) {
+      if (mounted) setState(() => saving = false);
+      return;
+    }
     if (_e case final p?) return _saveEdit(p);
     try {
       final id = await ref.read(guardedActionsProvider).addMedicine(
@@ -205,9 +236,10 @@ class _AddMedicineDialogState extends ConsumerState<AddMedicineDialog> {
     final e = _e;
     final priceChanged = e != null && (Paise.tryParse(mrp) != e.mrp || gst != e.gstRate || hsn.trim() != e.hsn);
     Widget f(String key, String label, String hint, String value, ValueChanged<String> set,
-            {List<TextInputFormatter>? fmt, TextInputType? kb, bool autofocus = false}) =>
+            {List<TextInputFormatter>? fmt, TextInputType? kb, bool autofocus = false, FocusNode? focus}) =>
         AppTextField(
           key: ValueKey('add-$key'),
+          focusNode: focus,
           label: label,
           hint: hint,
           value: value,
@@ -229,7 +261,7 @@ class _AddMedicineDialogState extends ConsumerState<AddMedicineDialog> {
         FieldGrid(
           minColumnWidth: 220,
           children: [
-            FieldSpan(child: f('name', 'Medicine name', 'e.g. Paracetamol 500 mg Tablet', name, (v) => name = v, autofocus: true)),
+            FieldSpan(child: f('name', 'Medicine name', 'e.g. Paracetamol 500 mg Tablet', name, (v) => name = v, autofocus: true, focus: _nameFocus)),
             f('salt', 'Salt / composition', 'Paracetamol 500 mg', salt, (v) => salt = v),
             f('maker', 'Manufacturer', 'Maker name', maker, (v) => maker = v),
             f('pack', 'Pack', 'Strip of 10', pack, (v) {

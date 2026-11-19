@@ -111,6 +111,8 @@ invoices       id PK, number TEXT UNIQUE, fy, seq INT, created_at INT, sale_date
                cgst_paise, sgst_paise, round_off_paise (signed), total_paise,
                staff_id FK, status ('paid'|'part_returned'|'returned'|'cancelled'), note NULL,
                gst_registered BOOL,
+               discount_flat_paise INT NULL (flat ₹ bill discount; discount_pct
+                 is then 0; NULL = percentage bill; credit notes NULL)          -- v10
                doc_type ('invoice'|'credit_note') DEFAULT 'invoice'              -- v5
                ref_invoice_id FK NULL (credit note → original invoice)          -- v5
 
@@ -247,6 +249,7 @@ For each line:
 gross    = mrp × qty                                   // whole packs
 gross    = floor(mrp × units ÷ units_per_pack)         // loose units (§4.9)
 discount = round(gross × discount_pct / 100)          // bill-level %, applied per line
+discount = share of a flat ₹ amount (§4.6)            // flat bills: by largest remainder
 net      = gross − discount
 taxable  = round(net × 100 / (100 + gst_rate))
 tax      = net − taxable
@@ -318,7 +321,8 @@ Adding the same batch again increments qty, capped at the batch's qty (toast if 
 - Numbering: own gapless series per FY, `creditNotePrefix` + the invoice separator, digits and
   FY switch (`CN/26-27/00001`), assigned inside the save transaction from `invoice_seq` key
   `CN:<fy>`.
-- Amounts: §4.1 maths on `mrp × qty returned` with the original bill's discount %; when a
+- Amounts: §4.1 maths on `mrp × qty returned` with the original bill's discount % (a flat-₹
+  bill: the line's stored discount × qty returned ÷ qty sold, rounded); when a
   return takes a line's last units, each column is original − earlier returns, so a fully
   returned line reconciles to the paisa. Credit-note totals use the same CGST/SGST split
   (odd paisa on SGST) and round-off as bills. A bill of supply stays tax 0.
@@ -334,8 +338,17 @@ Adding the same batch again increments qty, capped at the batch's qty (toast if 
 
 ### 4.6 Discounts
 
-- Bill-level percentage chips: 0, 5, 10, 15, 20, filtered to ≤ `maxDiscountPct` (setting).
-- Discounts above 5 % need permission `giveHighDiscount` (staff roles, §7.6).
+- Bill-level percentage chips: 0, 5, 10, 15, 20, filtered to ≤ `maxDiscountPct` (setting),
+  plus **Custom**: the cashier types either a whole % (0 … `maxDiscountPct`) or a flat ₹
+  amount off the bill.
+- A flat ₹ amount is split across the lines in proportion to their gross (MRP value):
+  each line gets floor(amount × gross ÷ Σgross); the leftover paise go one each to the
+  lines with the largest remainders (earlier line on a tie). The shares sum to the amount
+  exactly; GST is then worked backwards per line as in §4.1.
+- Limits apply to the effective %: a flat amount must be ≤ `maxDiscountPct` % of the MRP
+  subtotal (integer check `amount × 100 ≤ max × subtotal`).
+- Discounts above 5 % (effective, for ₹) need permission `giveHighDiscount` (staff roles, §7.6).
+- The typed value shows its limit / effective % live and the problem inline; save refuses it.
 
 ### 4.7 Purchases (order book)
 
@@ -539,7 +552,7 @@ Layout: left 3/5 (search, quick add, bill grid, shortcut hints), right 2/5 "Bill
   ≤ window) · Qty (number field, 1…batch qty) · MRP · Amount · delete. New rows slide in;
   the row just added flashes amber for 1.4 s. Empty state: "Bill is empty".
 - **Bill details**: customer name (F4 focuses), phone, doctor (becomes required with Rx items),
-  discount chips, totals card (items/units, subtotal, discount, taxable, CGST+SGST incl.,
+  discount chips + Custom (% / ₹ field, §4.6), totals card (items/units, subtotal, discount, taxable, CGST+SGST incl.,
   net payable 26 px), payment mode (Cash / UPI / Card, F8 cycles), primary
   "Save & print invoice  F10".
 - Shortcuts (window-level `Shortcuts` scoped to the billing route, not global OS hooks):

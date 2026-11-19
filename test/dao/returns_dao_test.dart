@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:rx_desk/core/db/app_database.dart';
 import 'package:rx_desk/core/db/daos/sales_dao.dart';
 import 'package:rx_desk/core/db/report_models.dart';
+import 'package:rx_desk/core/money/gst.dart';
 import 'package:rx_desk/core/money/paise.dart';
 import 'package:rx_desk/core/sales/bill_rules.dart';
 import 'package:rx_desk/core/sales/return_rules.dart';
@@ -18,7 +19,7 @@ void main() {
   final tRet = t0.add(const Duration(days: 2)); // 2026-11-11
 
   Future<SavedBill> sell(List<BillLineRequest> lines, {int disc = 0, String? doctor, DateTime? at}) => db.salesDao.saveBill(
-        SaveBillRequest(lines: lines, customerName: 'Esther', customerPhone: '9800000001', discountPct: disc, doctorName: doctor),
+        SaveBillRequest(lines: lines, customerName: 'Esther', customerPhone: '9800000001', discount: PercentDiscount(disc), doctorName: doctor),
         rules: const BillRules(),
         at: at ?? t0,
       );
@@ -37,6 +38,63 @@ void main() {
         rules: rules,
         at: at ?? tRet,
       );
+
+  group('flat ₹ bill returns (SPEC §4.5, §4.6)', () {
+    test('partial returns take the line’s discount pro-rata; the last one reconciles to the paisa', () async {
+      final (p1, b1) = await addMed(db, qty: 50);
+      final (p2, b2) = await addMed(db, name: 'Cetirizine 10 mg Tablet', salt: 'Cetirizine 10 mg', mrp: 2150, gst: 5, batch: 'CTZ01', qty: 40);
+      final bill = await db.salesDao.saveBill(
+        SaveBillRequest(
+          lines: [BillLineRequest(productId: p1, batchId: b1, qty: 3), BillLineRequest(productId: p2, batchId: b2, qty: 2)],
+          customerName: 'Esther',
+          discount: const FlatDiscount(Paise(1000)),
+        ),
+        rules: const BillRules(),
+        at: t0,
+      );
+      final orig = await itemsOf(bill.invoiceId);
+      expect(orig.map((i) => i.discountPaise), [683, 317]);
+
+      final cn1 = await giveBack(bill.invoiceId, [ReturnLineRequest(itemId: orig[0].id, qty: 1)]);
+      final l1 = (await itemsOf(cn1.creditNoteId)).single;
+      expect(l1.grossPaise, -3090);
+      expect(l1.discountPaise, -228); // 683 × 1/3
+      expect(l1.netPaise, -2862);
+      expect(l1.taxablePaise, -divRound(2862 * 100, 112));
+      final cnInv = (await db.salesDao.invoiceWithItems(cn1.creditNoteId))!.invoice;
+      expect(cnInv.discountFlatPaise, isNull);
+
+      await giveBack(bill.invoiceId, [ReturnLineRequest(itemId: orig[0].id, qty: 1)]);
+      await giveBack(bill.invoiceId, [ReturnLineRequest(itemId: orig[0].id, qty: 1), ReturnLineRequest(itemId: orig[1].id, qty: 2)]);
+
+      final rows = await db.customSelect(
+        'SELECT SUM(discount_paise) AS d, SUM(net_paise) AS n, SUM(taxable_paise) AS t, SUM(tax_paise) AS x FROM invoice_items',
+      ).getSingle();
+      expect((rows.read<int>('d'), rows.read<int>('n'), rows.read<int>('t'), rows.read<int>('x')), (0, 0, 0, 0));
+      expect((await db.salesDao.invoiceWithItems(bill.invoiceId))!.invoice.status, 'returned');
+    });
+
+    test('the return preview uses the bill’s flat discount', () async {
+      final (p, b) = await addMed(db, qty: 50);
+      final bill = await db.salesDao.saveBill(
+        SaveBillRequest(lines: [BillLineRequest(productId: p, batchId: b, qty: 4)], discount: const FlatDiscount(Paise(1236))),
+        rules: const BillRules(),
+        at: t0,
+      );
+      final ctx = (await db.salesDao.returnContext(bill.invoiceId))!;
+      final item = ctx.items.single;
+      final t = returnTotals(
+        lines: [ReturnLineRequest(itemId: item.id, qty: 1)],
+        sold: ctx.sold,
+        prior: ctx.prior,
+        discount: invoiceDiscount(ctx.invoice),
+        gstRegistered: true,
+        roundOff: false,
+      );
+      expect(t.discount.value, 309); // 1236 ÷ 4
+      expect(t.net.value, 3090 - 309);
+    });
+  });
 
   group('saveCreditNote — one transaction', () {
     test('partial return: credit note, restock vs write-off, summary on return day, status', () async {

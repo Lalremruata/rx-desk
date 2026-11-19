@@ -160,4 +160,30 @@ void main() {
       throwsA(isA<CatalogException>()),
     );
   });
+
+  group('same-name medicines', () {
+    test('productsNamed ignores case and outer spaces, flags hidden, skips the one being edited', () async {
+      final (a, _) = await addMed(db);
+      final (b, _) = await addMed(db, name: 'PARACETAMOL 650 mg tablet ', salt: 'Paracetamol 650 mg + Caffeine 50 mg', maker: 'Aurelis Labs', batch: 'PC2');
+      await addMed(db, name: 'Paracetamol 650 mg Tablet SR', batch: 'PC3');
+      await db.catalogDao.setProductActive(a, false, at: t0);
+
+      final all = await db.catalogDao.productsNamed('  paracetamol 650 MG Tablet');
+      expect(all.map((m) => (m.id, m.isActive)), [(b, true), (a, false)]); // active first
+      expect(all.first.maker, 'Aurelis Labs');
+      expect(all.first.salt, 'Paracetamol 650 mg + Caffeine 50 mg');
+
+      final others = await db.catalogDao.productsNamed('Paracetamol 650 mg Tablet', exceptProductId: b);
+      expect(others.map((m) => m.id), [a]);
+      expect(await db.catalogDao.productsNamed('Dolo 650'), isEmpty);
+      expect(await db.catalogDao.productsNamed('   '), isEmpty);
+    });
+
+    test('the same name with a different salt still saves as a separate medicine', () async {
+      final (a, _) = await addMed(db);
+      final (b, _) = await addMed(db, salt: 'Paracetamol 650 mg + Caffeine 50 mg', batch: 'PC2');
+      expect(b, isNot(a));
+      expect((await db.catalogDao.productsNamed('Paracetamol 650 mg Tablet')).length, 2);
+    });
+  });
 }

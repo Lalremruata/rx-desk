@@ -284,13 +284,25 @@ class BillController extends _$BillController {
   void setPhone(String v) => state = state.copyWith(phone: v);
   void setDoctor(String v) => state = state.copyWith(doctor: v);
 
+  /// A discount chip (whole %). Leaves manual entry.
   void setDiscount(int pct) {
     if (pct > BillRules.highDiscountThreshold && !ref.read(canProvider(Permission.giveHighDiscount))) {
       _toast('Your role can’t give more than ${BillRules.highDiscountThreshold}% discount', warn: true);
       return;
     }
-    state = state.copyWith(discountPct: pct);
+    state = state.copyWith(discountPct: pct, discountCustom: false, discountInput: '');
   }
+
+  /// Switches to a typed discount (whole % or flat ₹). Limits are checked
+  /// live ([billDiscountProblemProvider]) and again on save.
+  void useCustomDiscount() => state = state.copyWith(discountCustom: true);
+
+  void setDiscountKind(DiscountKind k) {
+    if (k == state.discountKind) return;
+    state = state.copyWith(discountKind: k, discountInput: '');
+  }
+
+  void setDiscountInput(String v) => state = state.copyWith(discountInput: v);
 
   bool get _canCredit => ref.read(canProvider(Permission.sellOnCredit));
 
@@ -326,9 +338,10 @@ class BillController extends _$BillController {
     if (announce) _toast('New bill started');
   }
 
-  /// Keeps discount within a newly lowered maximum.
+  /// Keeps a chip discount within a newly lowered maximum. A typed discount
+  /// is left as typed and flagged by [billDiscountProblemProvider].
   void clampDiscount(int max) {
-    if (state.discountPct > max) state = state.copyWith(discountPct: max);
+    if (!state.discountCustom && state.discountPct > max) state = state.copyWith(discountPct: max);
   }
 
   // ---------------------------------------------------------------------------
@@ -358,6 +371,12 @@ class BillController extends _$BillController {
       _toast(m, warn: true);
       return const BillRejected(m);
     }
+    final subtotal = state.lines.fold(0, (a, l) => a + proRataGross(l.mrp, l.qty, l.packSize).value);
+    if (manualDiscountProblem(state, Paise(subtotal), s.billRules(role: ref.read(sessionProvider)?.role ?? StaffRole.owner))
+        case final m?) {
+      _toast(m, warn: true);
+      return BillRejected(m);
+    }
     final user = ref.read(sessionProvider);
     state = state.copyWith(saving: true);
     try {
@@ -371,7 +390,7 @@ class BillController extends _$BillController {
           customerPhone: state.phone.trim().isEmpty ? null : state.phone.trim(),
           doctorName: state.doctor.trim().isEmpty ? null : state.doctor.trim(),
           paymentMode: state.payment,
-          discountPct: state.discountPct,
+          discount: state.discount,
           staffId: user?.staffId,
           paidNow: state.paidNowPaise,
           paidNowMode: state.paidNowMode,
@@ -418,23 +437,34 @@ class BillController extends _$BillController {
 BillTotals billTotals(Ref ref) {
   final bill = ref.watch(billControllerProvider);
   final s = ref.watch(settingsProvider);
+  final amounts = discountedLines(
+    [for (final l in bill.lines) (mrp: l.mrp, qty: l.qty, gstRate: l.gstRate, packSize: l.packSize)],
+    bill.discount,
+    gstRegistered: s.gstRegistered,
+  );
   return computeBill(
-    [
-      for (final l in bill.lines)
-        (
-          computeLine(
-            mrp: l.mrp,
-            qty: l.qty,
-            discountPct: bill.discountPct,
-            gstRate: l.gstRate,
-            gstRegistered: s.gstRegistered,
-            packSize: l.packSize,
-          ),
-          l.count,
-        ),
-    ],
+    [for (var i = 0; i < bill.lines.length; i++) (amounts[i], bill.lines[i].count)],
     roundOff: s.roundOff,
   );
+}
+
+/// Why the bill's discount can't be given (shown under the discount row),
+/// or null. Same check as on save (SPEC §4.6).
+@riverpod
+String? billDiscountProblem(Ref ref) {
+  final bill = ref.watch(billControllerProvider);
+  final role = ref.watch(sessionProvider)?.role ?? StaffRole.owner;
+  return manualDiscountProblem(bill, ref.watch(billTotalsProvider).subtotal, ref.watch(settingsProvider).billRules(role: role));
+}
+
+/// Problem with a typed (manual) discount on [bill], or null. Chip
+/// discounts are already filtered to what's allowed.
+String? manualDiscountProblem(BillState bill, Paise subtotal, BillRules rules) {
+  if (!bill.discountCustom) return null;
+  final d = bill.discount;
+  if (d case PercentDiscount(:final pct) when pct < 0) return 'Enter a whole number of %';
+  if (d case FlatDiscount(:final amount) when amount.value < 0) return 'Enter an amount in rupees';
+  return discountProblem(d, subtotal, rules);
 }
 
 /// Discount chips allowed by settings (SPEC §4.6).

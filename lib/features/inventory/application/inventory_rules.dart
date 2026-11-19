@@ -140,3 +140,22 @@ String inventoryCsv(List<StockRow> rows, {required DateTime now, required int de
 
 /// MRP shown with ₹ (two decimals).
 String mrpText(Paise p) => formatInr(p);
+
+/// Confirm text when a medicine with the same name already exists, or null
+/// when none does. Same names are allowed (one brand can have several
+/// compositions), so this warns rather than blocks.
+String? sameNameWarning(String name, String salt, List<SameNameProduct> matches) {
+  if (matches.isEmpty) return null;
+  final n = name.trim();
+  final s = (salt.trim().isEmpty ? n : salt.trim()).toLowerCase();
+  String line(SameNameProduct m) =>
+      '• ${m.name} — ${[m.salt, m.maker, m.pack].where((x) => x.trim().isNotEmpty).join(' · ')}'
+      '${m.isActive ? '' : ' (hidden)'}';
+  final list = matches.map(line).join('\n');
+  if (matches.any((m) => m.salt.trim().toLowerCase() == s)) {
+    return 'This looks like a duplicate of a medicine you already have:\n$list\n\n'
+        'Receive stock into the existing one instead, or save anyway to keep both.';
+  }
+  return '“$n” already exists with a different composition:\n$list\n\n'
+      'Save as a separate medicine? Staff will see both in search, told apart by salt and maker.';
+}

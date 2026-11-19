@@ -32,7 +32,7 @@ void main() {
           final l = line(mrp: 3333, qty: 7, disc: disc, gst: gst);
           var prior = PriorReturn.none;
           for (var i = 0; i < 7; i++) {
-            final a = returnAmounts(l, 1, prior, discountPct: disc, gstRegistered: true);
+            final a = returnAmounts(l, 1, prior, discount: PercentDiscount(disc), gstRegistered: true);
             expect(a.net.value, a.gross.value - a.discount.value);
             expect(a.tax.value, a.net.value - a.taxable.value);
             prior = add(prior, 1, a);
@@ -49,21 +49,21 @@ void main() {
 
     test('a partial return uses the §4.1 maths on the returned qty', () {
       final l = line(disc: 10);
-      final a = returnAmounts(l, 2, PriorReturn.none, discountPct: 10, gstRegistered: true);
+      final a = returnAmounts(l, 2, PriorReturn.none, discount: const PercentDiscount(10), gstRegistered: true);
       final want = computeLine(mrp: const Paise(3090), qty: 2, discountPct: 10, gstRate: 12);
       expect((a.gross, a.discount, a.net, a.taxable, a.tax), (want.gross, want.discount, want.net, want.taxable, want.tax));
     });
 
     test('returning the whole line in one go equals the original exactly', () {
       final l = line(mrp: 1, qty: 3, disc: 15, gst: 18);
-      final a = returnAmounts(l, 3, PriorReturn.none, discountPct: 15, gstRegistered: true);
+      final a = returnAmounts(l, 3, PriorReturn.none, discount: const PercentDiscount(15), gstRegistered: true);
       expect(a.net, l.amounts.net);
       expect(a.tax, l.amounts.tax);
     });
 
     test('bill of supply: tax stays 0', () {
       final l = line(registered: false, qty: 4, disc: 5);
-      final a = returnAmounts(l, 1, PriorReturn.none, discountPct: 5, gstRegistered: false);
+      final a = returnAmounts(l, 1, PriorReturn.none, discount: const PercentDiscount(5), gstRegistered: false);
       expect(a.tax, Paise.zero);
       expect(a.taxable, a.net);
     });
@@ -76,7 +76,7 @@ void main() {
         lines: const [ReturnLineRequest(itemId: 1, qty: 1), ReturnLineRequest(itemId: 2, qty: 1)],
         sold: sold,
         prior: const {},
-        discountPct: 0,
+        discount: const PercentDiscount(0),
         gstRegistered: true,
         roundOff: true,
       );
@@ -89,7 +89,7 @@ void main() {
         lines: const [ReturnLineRequest(itemId: 1, qty: 1)],
         sold: {1: line(mrp: 1060, qty: 1)},
         prior: const {},
-        discountPct: 0,
+        discount: const PercentDiscount(0),
         gstRegistered: true,
         roundOff: true,
       );
@@ -98,7 +98,7 @@ void main() {
         lines: const [ReturnLineRequest(itemId: 1, qty: 1)],
         sold: {1: line(mrp: 1040, qty: 1)},
         prior: const {},
-        discountPct: 0,
+        discount: const PercentDiscount(0),
         gstRegistered: true,
         roundOff: true,
       );
@@ -110,7 +110,7 @@ void main() {
         lines: const [ReturnLineRequest(itemId: 1, qty: 0), ReturnLineRequest(itemId: 2, qty: 9)],
         sold: {1: line(), 2: line(id: 2, qty: 2)},
         prior: const {},
-        discountPct: 0,
+        discount: const PercentDiscount(0),
         gstRegistered: true,
         roundOff: false,
       );

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:rx_desk/core/db/app_database.dart';
 import 'package:rx_desk/core/db/daos/sales_dao.dart';
+import 'package:rx_desk/core/money/gst.dart';
 import 'package:rx_desk/core/sales/bill_rules.dart';
 import 'package:rx_desk/core/widgets/widgets.dart';
 import 'package:rx_desk/features/invoices/application/invoice_printer.dart';
@@ -27,7 +28,7 @@ Future<void> _bills(AppDatabase db) async {
         lines: [BillLineRequest(productId: p, batchId: b, qty: i + 1)],
         customerName: ['Esther', 'Ruata', 'Mawia'][i],
         paymentMode: i == 1 ? 'Cash' : 'UPI',
-        discountPct: i == 2 ? 5 : 0,
+        discount: PercentDiscount(i == 2 ? 5 : 0),
       ),
       rules: const BillRules(),
       at: testNow.subtract(Duration(minutes: 30 - i)),

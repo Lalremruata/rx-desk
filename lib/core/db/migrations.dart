@@ -7,7 +7,7 @@ import 'fts.dart';
 
 /// Current schema version. Every bump needs a step in [_steps] and a test in
 /// test/dao/migration_test.dart (CLAUDE.md rule 10).
-const int latestSchemaVersion = 9;
+const int latestSchemaVersion = 10;
 
 /// `_steps[v]` migrates schema v → v + 1.
 final Map<int, Future<void> Function(AppDatabase db, Migrator m)> _steps = {
@@ -105,6 +105,11 @@ final Map<int, Future<void> Function(AppDatabase db, Migrator m)> _steps = {
   // v8 → v9: editable inventory (SPEC §5.3) — reason note on stock corrections.
   8: (db, m) async {
     if (!await _hasColumn(db, 'stock_movements', 'note')) await m.addColumn(db.stockMovements, db.stockMovements.note);
+  },
+  // v9 → v10: flat ₹ bill discounts (SPEC §4.6) — invoices.discount_flat_paise.
+  // Existing bills stay percentage bills (null).
+  9: (db, m) async {
+    if (!await _hasColumn(db, 'invoices', 'discount_flat_paise')) await m.addColumn(db.invoices, db.invoices.discountFlatPaise);
   },
 };
 

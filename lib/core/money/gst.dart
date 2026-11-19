@@ -34,7 +34,7 @@ class LineAmounts {
 /// ```
 /// gross    = mrp × qty                      (whole packs)
 /// gross    = floor(mrp × qty ÷ pack_size)   (loose units, never above MRP)
-/// discount = round(gross × discount_pct / 100)
+/// discount = round(gross × discount_pct / 100)   (flat ₹: see [discountedLines])
 /// net      = gross − discount
 /// taxable  = round(net × 100 / (100 + gst_rate))
 /// tax      = net − taxable
@@ -54,16 +54,149 @@ LineAmounts computeLine({
   assert(gstRate >= 0, 'gst rate must be ≥ 0');
   assert(packSize >= 1, 'pack size must be ≥ 1');
   final gross = proRataGross(mrp, qty, packSize).value;
-  final discount = divRound(gross * discountPct, 100);
-  final net = gross - discount;
+  return lineFromGross(
+    gross: Paise(gross),
+    discount: Paise(divRound(gross * discountPct, 100)),
+    gstRate: gstRate,
+    gstRegistered: gstRegistered,
+  );
+}
+
+/// The rest of SPEC §4.1 once a line's gross and discount are known:
+/// net = gross − discount, GST worked backwards from net and rounded per line.
+LineAmounts lineFromGross({
+  required Paise gross,
+  required Paise discount,
+  required int gstRate,
+  bool gstRegistered = true,
+}) {
+  final net = gross.value - discount.value;
   final taxable = gstRegistered ? divRound(net * 100, 100 + gstRate) : net;
   return LineAmounts(
-    gross: Paise(gross),
-    discount: Paise(discount),
+    gross: gross,
+    discount: discount,
     net: Paise(net),
     taxable: Paise(taxable),
     tax: Paise(net - taxable),
   );
+}
+
+// ---------------------------------------------------------------------------
+// Bill-level discount (SPEC §4.6)
+
+/// A bill's discount: a whole percentage applied to every line, or a flat
+/// rupee amount split across the lines in proportion to their MRP value.
+sealed class BillDiscount {
+  const BillDiscount();
+
+  bool get isZero;
+
+  /// "10%" / "₹25.00".
+  String get label;
+}
+
+final class PercentDiscount extends BillDiscount {
+  const PercentDiscount(this.pct);
+
+  final int pct;
+
+  @override
+  bool get isZero => pct == 0;
+
+  @override
+  String get label => '$pct%';
+
+  @override
+  bool operator ==(Object other) => other is PercentDiscount && other.pct == pct;
+
+  @override
+  int get hashCode => pct.hashCode;
+
+  @override
+  String toString() => 'PercentDiscount($pct)';
+}
+
+final class FlatDiscount extends BillDiscount {
+  const FlatDiscount(this.amount);
+
+  final Paise amount;
+
+  @override
+  bool get isZero => amount.value == 0;
+
+  @override
+  String get label => formatInr(amount);
+
+  @override
+  bool operator ==(Object other) => other is FlatDiscount && other.amount == amount;
+
+  @override
+  int get hashCode => amount.hashCode;
+
+  @override
+  String toString() => 'FlatDiscount($amount)';
+}
+
+/// Splits a flat [amount] (paise) across lines in proportion to [grosses]
+/// by largest remainder: each line gets floor(amount × gross ÷ Σgross), then
+/// the leftover paise go one each to the largest remainders (earlier line on
+/// a tie). The shares sum to [amount] exactly and none exceeds its gross
+/// while amount ≤ Σgross.
+List<int> allocateFlatDiscount(int amount, List<int> grosses) {
+  assert(amount >= 0, 'flat discount must be ≥ 0');
+  final total = grosses.fold(0, (a, g) => a + g);
+  if (amount == 0 || total <= 0) return List.filled(grosses.length, 0);
+  assert(amount <= total, 'flat discount above the subtotal');
+  final shares = [for (final g in grosses) g * amount ~/ total];
+  var left = amount - shares.fold(0, (a, x) => a + x);
+  final order = List.generate(grosses.length, (i) => i)
+    ..sort((a, b) {
+      final ra = grosses[a] * amount % total, rb = grosses[b] * amount % total;
+      return ra != rb ? rb.compareTo(ra) : a.compareTo(b);
+    });
+  for (final i in order) {
+    if (left == 0) break;
+    shares[i]++;
+    left--;
+  }
+  return shares;
+}
+
+/// One line of a bill before discount.
+typedef BillLineInput = ({Paise mrp, int qty, int gstRate, int packSize});
+
+/// Line amounts for a whole bill with [discount] (SPEC §4.1, §4.6).
+List<LineAmounts> discountedLines(List<BillLineInput> lines, BillDiscount discount, {bool gstRegistered = true}) {
+  switch (discount) {
+    case PercentDiscount(:final pct):
+      // Held to 0–100 for a live preview; validation reports the problem.
+      final p = pct.clamp(0, 100);
+      return [
+        for (final l in lines)
+          computeLine(
+            mrp: l.mrp,
+            qty: l.qty,
+            discountPct: p,
+            gstRate: l.gstRate,
+            gstRegistered: gstRegistered,
+            packSize: l.packSize,
+          ),
+      ];
+    case FlatDiscount(:final amount):
+      final grosses = [for (final l in lines) proRataGross(l.mrp, l.qty, l.packSize).value];
+      final total = grosses.fold(0, (a, g) => a + g);
+      // Never more than the bill; validation reports the problem.
+      final shares = allocateFlatDiscount(amount.value.clamp(0, total < 0 ? 0 : total), grosses);
+      return [
+        for (var i = 0; i < lines.length; i++)
+          lineFromGross(
+            gross: Paise(grosses[i]),
+            discount: Paise(shares[i]),
+            gstRate: lines[i].gstRate,
+            gstRegistered: gstRegistered,
+          ),
+      ];
+  }
 }
 
 /// Price of [qty] units at [mrp] per pack of [packSize] units, rounded down

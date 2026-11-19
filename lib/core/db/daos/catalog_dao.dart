@@ -414,6 +414,33 @@ class CatalogDao extends DatabaseAccessor<AppDatabase> with _$CatalogDaoMixin {
     return [for (final id in ids) ?byId[id]];
   }
 
+  /// Medicines whose name matches [name] ignoring case and outer spaces,
+  /// hidden ones included (flagged), active first. [exceptProductId] is the
+  /// medicine being edited.
+  Future<List<SameNameProduct>> productsNamed(String name, {int? exceptProductId, int limit = 5}) async {
+    final n = name.trim();
+    if (n.isEmpty) return const [];
+    final rows = await customSelect(
+      'SELECT p.id, p.name, p.salt, p.pack, p.is_active, m.name AS maker '
+      'FROM products p JOIN manufacturers m ON m.id = p.manufacturer_id '
+      'WHERE lower(trim(p.name)) = lower(?1) AND p.id != ?2 '
+      'ORDER BY p.is_active DESC, p.id LIMIT ?3',
+      variables: [Variable.withString(n), Variable.withInt(exceptProductId ?? -1), Variable.withInt(limit)],
+      readsFrom: {products, manufacturers},
+    ).get();
+    return [
+      for (final r in rows)
+        SameNameProduct(
+          id: r.read<int>('id'),
+          name: r.read<String>('name'),
+          salt: r.read<String>('salt'),
+          maker: r.read<String>('maker'),
+          pack: r.read<String>('pack'),
+          isActive: r.read<bool>('is_active'),
+        ),
+    ];
+  }
+
   Future<int> productCount() async {
     final r = await customSelect('SELECT COUNT(*) AS c FROM products WHERE is_active = 1', readsFrom: {products}).getSingle();
     return r.read<int>('c');

@@ -12,6 +12,26 @@ const List<String> drugSchedules = ['', 'H', 'H1', 'X'];
 
 const List<int> gstRates = [0, 5, 12, 18];
 
+/// An existing medicine that shares a name with one being added or renamed.
+/// Same names are allowed (different compositions exist); the form warns.
+class SameNameProduct {
+  const SameNameProduct({
+    required this.id,
+    required this.name,
+    required this.salt,
+    required this.maker,
+    required this.pack,
+    required this.isActive,
+  });
+
+  final int id;
+  final String name;
+  final String salt;
+  final String maker;
+  final String pack;
+  final bool isActive;
+}
+
 /// A product with its derived stock (SPEC §3.4), computed in SQL.
 @freezed
 abstract class StockRow with _$StockRow {

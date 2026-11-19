@@ -103,4 +103,27 @@ void main() {
     expect(StockAdjustReason.other.needsNote, isTrue);
     expect(StockAdjustReason.count.needsNote, isFalse);
   });
+
+  group('sameNameWarning', () {
+    const dolo = SameNameProduct(id: 1, name: 'Dolo 650', salt: 'Paracetamol 650 mg', maker: 'Micro Labs', pack: 'Strip of 15', isActive: true);
+    const hidden = SameNameProduct(id: 2, name: 'Dolo 650', salt: 'Paracetamol 650 mg + Caffeine', maker: 'Other', pack: '', isActive: false);
+
+    test('null when nothing shares the name', () {
+      expect(sameNameWarning('Dolo 650', 'Paracetamol 650 mg', const []), isNull);
+    });
+
+    test('different composition: lists salt · maker · pack and asks to save separately', () {
+      final m = sameNameWarning('Dolo 650 ', 'Paracetamol 500 mg', const [dolo, hidden])!;
+      expect(m, startsWith('“Dolo 650” already exists with a different composition'));
+      expect(m, contains('• Dolo 650 — Paracetamol 650 mg · Micro Labs · Strip of 15'));
+      expect(m, contains('• Dolo 650 — Paracetamol 650 mg + Caffeine · Other (hidden)'));
+      expect(m, contains('Save as a separate medicine?'));
+    });
+
+    test('same salt reads as a likely duplicate (case-insensitive; blank salt = name)', () {
+      expect(sameNameWarning('Dolo 650', 'paracetamol 650 MG', const [dolo]), startsWith('This looks like a duplicate'));
+      const bySalt = SameNameProduct(id: 3, name: 'Dolo 650', salt: 'Dolo 650', maker: 'M', pack: 'P', isActive: true);
+      expect(sameNameWarning('Dolo 650', '', const [bySalt]), startsWith('This looks like a duplicate'));
+    });
+  });
 }

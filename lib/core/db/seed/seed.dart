@@ -1,6 +1,7 @@
 import 'package:drift/drift.dart';
 
 import '../../fy/fy.dart';
+import '../../money/gst.dart';
 import '../../money/paise.dart';
 import '../../sales/bill_rules.dart';
 import '../../utils/expiry.dart';
@@ -207,7 +208,7 @@ Future<SeedReport> seedDemoData(
             customerPhone: b.phone,
             doctorName: b.doctor,
             paymentMode: b.pay,
-            discountPct: b.disc,
+            discount: PercentDiscount(b.disc),
           ),
           rules: rules,
           at: b.at,

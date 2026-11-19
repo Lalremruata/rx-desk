@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:rx_desk/core/db/app_database.dart';
+import 'package:rx_desk/core/db/db_provider.dart';
 import 'package:rx_desk/core/widgets/widgets.dart';
 
 import '../helpers/pump_app.dart';
@@ -115,6 +116,43 @@ void main() {
     expect(find.text('Levocetirizine 5 mg Tablet'), findsNWidgets(2)); // row + search box
     expect(find.text('₹35.50'), findsWidgets);
     expect(find.byType(StatusBadge), findsWidgets);
+  });
+
+  testWidgets('same name, different salt: warns, Cancel keeps the form, Save anyway adds a second medicine', (tester) async {
+    final c = await pumpApp(tester, size: const Size(1600, 1000), location: '/inventory', setUpDb: _seed);
+    await _run(tester);
+    final before = (await tester.runAsync(() => c.read(appDatabaseProvider).catalogDao.productsNamed('Paracetamol 650 mg Tablet')))!;
+    expect(before, hasLength(1));
+
+    await tester.tap(find.byKey(const ValueKey('add-medicine')));
+    await _run(tester);
+    Future<void> type(String key, String v) =>
+        tester.enterText(find.descendant(of: find.byKey(ValueKey('add-$key')), matching: find.byType(TextField)), v);
+    await type('name', 'paracetamol 650 mg tablet');
+    await type('salt', 'Paracetamol 650 mg + Caffeine 50 mg');
+    await type('maker', 'Aurelis Labs');
+    await type('mrp', '42');
+    Future<void> save() async {
+      await tester.ensureVisible(find.byKey(const ValueKey('save-medicine')));
+      await tester.tap(find.byKey(const ValueKey('save-medicine')));
+      await _run(tester);
+    }
+
+    await save();
+    expect(find.text('Medicine name already exists'), findsOneWidget);
+    expect(find.textContaining('Paracetamol 650 mg · Northline Pharma'), findsOneWidget);
+    await tester.tap(find.descendant(of: find.byType(ConfirmDialog), matching: find.text('Cancel')));
+    await _run(tester);
+    expect(find.text('Medicine name already exists'), findsNothing);
+    expect(find.byKey(const ValueKey('save-medicine')), findsOneWidget); // form still open
+    expect(c.read(toastsProvider).map((t) => t.text), isNot(contains('paracetamol 650 mg tablet added to inventory')));
+
+    await save();
+    await tester.tap(find.text('Save anyway'));
+    await _run(tester);
+    expect(c.read(toastsProvider).map((t) => t.text), contains('paracetamol 650 mg tablet added to inventory'));
+    final after = (await tester.runAsync(() => c.read(appDatabaseProvider).catalogDao.productsNamed('Paracetamol 650 mg Tablet')))!;
+    expect(after.map((m) => m.salt), containsAll(['Paracetamol 650 mg', 'Paracetamol 650 mg + Caffeine 50 mg']));
   });
 
   Future<void> typeIn(WidgetTester tester, String key, String v) =>

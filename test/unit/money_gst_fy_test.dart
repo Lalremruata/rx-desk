@@ -177,4 +177,75 @@ void main() {
       expect(const InvoiceNumberFormat(fyInNumber: false).seqKey('26-27'), 'all');
     });
   });
+
+  group('flat ₹ discount (SPEC §4.6)', () {
+    test('allocateFlatDiscount: largest remainder, sums exactly', () {
+      // floors 33/54/11 (=98); remainders 18060, 3280, 15020 → +1 to lines 0 and 2.
+      expect(allocateFlatDiscount(100, [6180, 9850, 2150]), [34, 54, 12]);
+      expect(allocateFlatDiscount(1, [100, 100]), [1, 0]); // tie → earlier line
+      expect(allocateFlatDiscount(3, [1, 1, 1]), [1, 1, 1]);
+      expect(allocateFlatDiscount(10, [0, 100]), [0, 10]);
+      expect(allocateFlatDiscount(300, [100, 200]), [100, 200]); // whole bill
+      expect(allocateFlatDiscount(0, [100, 200]), [0, 0]);
+      expect(allocateFlatDiscount(5, const []), isEmpty);
+    });
+
+    test('allocation never exceeds a line and always sums to the amount', () {
+      final grosses = [1, 7, 333, 3090, 12, 99999, 5];
+      final total = grosses.fold(0, (a, g) => a + g);
+      for (final amt in [1, 2, 17, 999, 50000, total - 1, total]) {
+        final s = allocateFlatDiscount(amt, grosses);
+        expect(s.fold(0, (a, x) => a + x), amt, reason: '$amt');
+        for (var i = 0; i < grosses.length; i++) {
+          expect(s[i], inInclusiveRange(0, grosses[i]), reason: '$amt line $i');
+        }
+      }
+    });
+
+    test('discountedLines with a % matches computeLine exactly', () {
+      final lines = [
+        (mrp: const Paise(3090), qty: 3, gstRate: 12, packSize: 1),
+        (mrp: const Paise(9850), qty: 5, gstRate: 5, packSize: 10),
+      ];
+      final got = discountedLines(lines, const PercentDiscount(10));
+      expect(got.map((a) => '$a'), [
+        '${computeLine(mrp: const Paise(3090), qty: 3, discountPct: 10, gstRate: 12)}',
+        '${computeLine(mrp: const Paise(9850), qty: 5, discountPct: 10, gstRate: 5, packSize: 10)}',
+      ]);
+    });
+
+    test('flat ₹ across 5 / 12 / 18 % lines: Σdiscount = amount, GST backwards per line', () {
+      final lines = [
+        (mrp: const Paise(1050), qty: 1, gstRate: 5, packSize: 1),
+        (mrp: const Paise(1120), qty: 1, gstRate: 12, packSize: 1),
+        (mrp: const Paise(1180), qty: 1, gstRate: 18, packSize: 1),
+      ];
+      final got = discountedLines(lines, const FlatDiscount(Paise(300)));
+      expect(got.fold(0, (a, l) => a + l.discount.value), 300);
+      expect(got.map((l) => l.discount.value), [94, 100, 106]); // 3350 split by MRP
+      for (final (i, l) in got.indexed) {
+        final rate = lines[i].gstRate;
+        expect(l.net.value, l.gross.value - l.discount.value);
+        expect(l.taxable.value, divRound(l.net.value * 100, 100 + rate));
+        expect(l.tax.value, l.net.value - l.taxable.value);
+      }
+      final t = computeBill([for (final l in got) (l, 1)], roundOff: true);
+      expect(t.subtotal.value, 3350);
+      expect(t.discount.value, 300);
+      expect(t.net.value, 3050);
+    });
+
+    test('a flat amount above the bill is held to the bill; bill of supply has no tax', () {
+      final lines = [(mrp: const Paise(500), qty: 1, gstRate: 12, packSize: 1)];
+      expect(discountedLines(lines, const FlatDiscount(Paise(900))).single.net.value, 0);
+      final bos = discountedLines(lines, const FlatDiscount(Paise(50)), gstRegistered: false).single;
+      expect((bos.net.value, bos.taxable.value, bos.tax.value), (450, 450, 0));
+    });
+
+    test('labels', () {
+      expect(const PercentDiscount(7).label, '7%');
+      expect(const FlatDiscount(Paise(2500)).label, '₹25.00');
+      expect(const FlatDiscount(Paise.zero).isZero, isTrue);
+    });
+  });
 }

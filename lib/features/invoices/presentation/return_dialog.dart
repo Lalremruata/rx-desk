@@ -105,7 +105,7 @@ class _ReturnItemsDialogState extends ConsumerState<ReturnItemsDialog> {
       lines: _lines,
       sold: ctx.sold,
       prior: ctx.prior,
-      discountPct: inv.discountPct,
+      discount: invoiceDiscount(inv),
       gstRegistered: inv.gstRegistered,
       roundOff: rules.roundOff,
     );
@@ -125,7 +125,7 @@ class _ReturnItemsDialogState extends ConsumerState<ReturnItemsDialog> {
                   const SizedBox(height: 4),
                   Text(
                     '${inv.number} · ${inv.customerName} · ${dayLabel(inv.saleDate)}'
-                    '${inv.discountPct > 0 ? ' · ${inv.discountPct}% discount' : ''}',
+                    '${invoiceDiscount(inv).isZero ? '' : ' · ${invoiceDiscount(inv).label} discount'}',
                     style: AppType.small.copyWith(color: AppColors.textSecondary),
                   ),
                 ],

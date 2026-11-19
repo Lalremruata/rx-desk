@@ -93,15 +93,16 @@ int returnable(SoldLine line, PriorReturn prior) => (line.qty - prior.qty).clamp
 
 /// Refund amounts (positive) for returning [qty] units of [line].
 ///
-/// SPEC §4.1 maths on `mrp × qty` with the original bill's discount %. When
-/// the return takes the line's last units, every column is the original
-/// minus what earlier returns took, so a fully returned line reconciles to
-/// the paisa.
+/// SPEC §4.1 maths on `mrp × qty` with the original bill's discount: its
+/// % for a percentage bill; for a flat ₹ bill, the line's own discount
+/// pro-rata to the units returned. When the return takes the line's last
+/// units, every column is the original minus what earlier returns took, so a
+/// fully returned line reconciles to the paisa.
 LineAmounts returnAmounts(
   SoldLine line,
   int qty,
   PriorReturn prior, {
-  required int discountPct,
+  required BillDiscount discount,
   required bool gstRegistered,
 }) {
   final left = returnable(line, prior);
@@ -116,14 +117,22 @@ LineAmounts returnAmounts(
       tax: o.tax - prior.tax,
     );
   }
-  return computeLine(
-    mrp: line.mrp,
-    qty: qty,
-    discountPct: discountPct,
-    gstRate: line.gstRate,
-    gstRegistered: gstRegistered,
-    packSize: line.packSize,
-  );
+  return switch (discount) {
+    PercentDiscount(:final pct) => computeLine(
+        mrp: line.mrp,
+        qty: qty,
+        discountPct: pct,
+        gstRate: line.gstRate,
+        gstRegistered: gstRegistered,
+        packSize: line.packSize,
+      ),
+    FlatDiscount() => lineFromGross(
+        gross: proRataGross(line.mrp, qty, line.packSize),
+        discount: Paise(divRound(line.amounts.discount.value * qty, line.qty)),
+        gstRate: line.gstRate,
+        gstRegistered: gstRegistered,
+      ),
+  };
 }
 
 /// Whole days from the bill's sale date to [at] (local calendar days).
@@ -199,7 +208,7 @@ BillTotals returnTotals({
   required List<ReturnLineRequest> lines,
   required Map<int, SoldLine> sold,
   required Map<int, PriorReturn> prior,
-  required int discountPct,
+  required BillDiscount discount,
   required bool gstRegistered,
   required bool roundOff,
 }) =>
@@ -212,7 +221,7 @@ BillTotals returnTotals({
                 sold[l.itemId]!,
                 l.qty,
                 prior[l.itemId] ?? PriorReturn.none,
-                discountPct: discountPct,
+                discount: discount,
                 gstRegistered: gstRegistered,
               ),
               l.qty,

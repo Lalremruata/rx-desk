@@ -19,7 +19,7 @@ class SaveBillRequest {
     this.customerPhone,
     this.doctorName,
     this.paymentMode = 'Cash',
-    this.discountPct = 0,
+    this.discount = const PercentDiscount(0),
     this.staffId,
     this.note,
     this.paidNow = Paise.zero,
@@ -32,7 +32,8 @@ class SaveBillRequest {
   final String? customerPhone;
   final String? doctorName;
   final String paymentMode;
-  final int discountPct;
+  /// Bill-level discount: a whole % or a flat ₹ (SPEC §4.6).
+  final BillDiscount discount;
   final int? staffId;
   final String? note;
 
@@ -165,7 +166,7 @@ class SalesDao extends DatabaseAccessor<AppDatabase> with _$SalesDaoMixin {
         lines: req.lines,
         factsByBatch: {for (final e in facts.entries) e.key: e.value.facts},
         rules: rules,
-        discountPct: req.discountPct,
+        discount: req.discount,
         doctorName: req.doctorName,
         paymentMode: req.paymentMode,
         at: at,
@@ -179,7 +180,7 @@ class SalesDao extends DatabaseAccessor<AppDatabase> with _$SalesDaoMixin {
       final amounts = amountsFor(
         req.lines,
         {for (final e in facts.entries) e.key: e.value.facts},
-        discountPct: req.discountPct,
+        discount: req.discount,
         gstRegistered: rules.gstRegistered,
       );
       final totals = computeBill(
@@ -228,7 +229,14 @@ class SalesDao extends DatabaseAccessor<AppDatabase> with _$SalesDaoMixin {
           customerPhone: Value(phone.isEmpty ? null : phone),
           doctorName: Value(doctor.isEmpty ? null : doctor),
           paymentMode: req.paymentMode,
-          discountPct: req.discountPct,
+          discountPct: switch (req.discount) {
+            PercentDiscount(:final pct) => pct,
+            FlatDiscount() => 0,
+          },
+          discountFlatPaise: Value(switch (req.discount) {
+            FlatDiscount(:final amount) => amount.value,
+            PercentDiscount() => null,
+          }),
           subtotalPaise: totals.subtotal.value,
           discountPaise: totals.discount.value,
           taxablePaise: totals.taxable.value,
@@ -590,7 +598,7 @@ class SalesDao extends DatabaseAccessor<AppDatabase> with _$SalesDaoMixin {
             ctx.sold[l.itemId]!,
             l.qty,
             ctx.prior[l.itemId] ?? PriorReturn.none,
-            discountPct: inv.discountPct,
+            discount: invoiceDiscount(inv),
             gstRegistered: inv.gstRegistered,
           ),
       ];
@@ -894,4 +902,11 @@ class _Facts {
   final String hsn;
   final String maker;
   final LineFacts facts;
+}
+
+/// The discount a bill was saved with (SPEC §4.6): a flat ₹ when
+/// `discount_flat_paise` is set, otherwise its percentage.
+BillDiscount invoiceDiscount(Invoice inv) {
+  final flat = inv.discountFlatPaise;
+  return flat != null ? FlatDiscount(Paise(flat)) : PercentDiscount(inv.discountPct);
 }

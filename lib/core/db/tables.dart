@@ -121,6 +121,10 @@ class Invoices extends Table {
   /// 'Cash' | 'UPI' | 'Card'
   TextColumn get paymentMode => text()();
   IntColumn get discountPct => integer()();
+
+  /// v10: a flat ₹ bill discount (SPEC §4.6), split across the lines by
+  /// MRP value; [discountPct] is then 0. Null = percentage discount.
+  IntColumn get discountFlatPaise => integer().nullable()();
   IntColumn get subtotalPaise => integer()();
   IntColumn get discountPaise => integer()();
   IntColumn get taxablePaise => integer()();

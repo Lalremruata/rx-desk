@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:rx_desk/core/db/app_database.dart';
 import 'package:rx_desk/core/db/daos/catalog_dao.dart';
 import 'package:rx_desk/core/db/daos/sales_dao.dart';
+import 'package:rx_desk/core/money/gst.dart';
 import 'package:rx_desk/core/money/paise.dart';
 import 'package:rx_desk/core/sales/bill_rules.dart';
 import 'package:rx_desk/core/sales/return_rules.dart';
@@ -14,7 +15,7 @@ void main() {
   tearDown(() => db.close());
 
   Future<SavedBill> sell(List<BillLineRequest> lines, {int disc = 0}) => db.salesDao.saveBill(
-        SaveBillRequest(lines: lines, discountPct: disc),
+        SaveBillRequest(lines: lines, discount: PercentDiscount(disc)),
         rules: const BillRules(),
         at: t0,
       );

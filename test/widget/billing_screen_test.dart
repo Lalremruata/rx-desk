@@ -133,6 +133,56 @@ void main() {
     expect(c.read(billControllerProvider).lines.single.qty, 12);
   });
 
+  Future<void> addCrocin(WidgetTester tester) async {
+    await tester.enterText(_search, 'crocin');
+    await _run(tester, 300);
+    await _key(tester, LogicalKeyboardKey.enter); // one batch → added directly
+    expect(find.text('CRO77'), findsOneWidget);
+  }
+
+  Finder discountField() => find.byKey(const ValueKey('discount-input'));
+
+  testWidgets('Custom discount: ₹ amount shows its %, over the cap is flagged, saves', (tester) async {
+    final c = await pumpApp(tester, size: const Size(1440, 900), setUpDb: billingFixture);
+    await _run(tester);
+    await addCrocin(tester); // ₹25.00
+    await tester.tap(find.text('Custom'));
+    await _run(tester, 200);
+    expect(discountField(), findsOneWidget);
+    expect(find.text('Whole number, up to 15%'), findsOneWidget);
+
+    await tester.tap(find.text('₹'));
+    await _run(tester, 200);
+    await tester.enterText(discountField(), '4');
+    await _run(tester, 200);
+    expect(find.text('Discount can be at most 15% of the MRP (₹3.75)'), findsOneWidget);
+
+    await tester.enterText(discountField(), '3');
+    await _run(tester, 200);
+    expect(find.text('= 12.0% of the MRP · max ₹3.75'), findsOneWidget);
+    expect(find.text('− ₹3.00'), findsOneWidget);
+
+    await _key(tester, LogicalKeyboardKey.f10);
+    await _run(tester, 600);
+    expect(c.read(toastsProvider).map((t) => t.text).first, startsWith('INV/26-27/00001 saved · ₹22.00'));
+  });
+
+  for (final (name, size) in [('tablet portrait', tabletPortrait), ('1280×800', const Size(1280, 800))]) {
+    testWidgets('Custom discount lays out on $name without overflow', (tester) async {
+      await pumpApp(tester, size: size, setUpDb: billingFixture);
+      await _run(tester);
+      await addCrocin(tester);
+      await tester.ensureVisible(find.text('Custom'));
+      await tester.tap(find.text('Custom'));
+      await _run(tester, 200);
+      await tester.ensureVisible(find.text('₹'));
+      await tester.tap(find.text('₹'));
+      await _run(tester, 200);
+      expect(discountField(), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+  }
+
   testWidgets('billing lays out on tablet portrait without overflow', (tester) async {
     await pumpApp(tester, size: tabletPortrait, setUpDb: billingFixture);
     await _run(tester);

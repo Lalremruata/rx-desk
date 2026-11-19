@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/money/gst.dart';
 import '../../../core/money/paise.dart';
 import '../../../core/sales/bill_rules.dart';
 import '../../../core/sales/credit_rules.dart';
@@ -12,6 +13,7 @@ import '../../../core/widgets/widgets.dart';
 import '../../customers/application/customers_providers.dart';
 import '../../settings/application/settings_providers.dart';
 import '../application/bill_controller.dart';
+import '../application/bill_state.dart';
 
 /// Right column: customer, doctor, discount, totals, payment, Save & print.
 class BillDetails extends ConsumerWidget {
@@ -103,11 +105,24 @@ class BillDetails extends ConsumerWidget {
               SegmentedPills<int>(
                 semanticLabel: 'Discount',
                 options: [for (final d in chips) PillOption(d, '$d%')],
-                selected: chips.contains(bill.discountPct) ? bill.discountPct : 0,
+                // None highlighted while a typed discount is in use.
+                selected: bill.discountCustom ? -1 : (chips.contains(bill.discountPct) ? bill.discountPct : 0),
                 onChanged: ctl.setDiscount,
+              ),
+              // Its own pill so it wraps under the chips in a narrow column.
+              SegmentedPills<bool>(
+                key: const ValueKey('discount-custom'),
+                semanticLabel: 'Custom discount',
+                options: const [PillOption(true, 'Custom', tooltip: 'Type a % or a ₹ amount')],
+                selected: bill.discountCustom,
+                onChanged: (_) => ctl.useCustomDiscount(),
               ),
             ],
           ),
+          if (bill.discountCustom) ...[
+            const SizedBox(height: AppSpace.md),
+            _ManualDiscount(subtotal: t.subtotal, maxPct: s.maxDiscountPct),
+          ],
           const SizedBox(height: AppSpace.lg),
           Container(
             padding: const EdgeInsets.all(AppSpace.gap14),
@@ -313,6 +328,69 @@ class _CreditPanel extends ConsumerWidget {
             ),
         ],
       ),
+    );
+  }
+}
+
+/// Manual discount (SPEC §4.6): a whole % or a flat ₹ amount, with the
+/// limit or the problem shown underneath.
+class _ManualDiscount extends ConsumerWidget {
+  const _ManualDiscount({required this.subtotal, required this.maxPct});
+
+  final Paise subtotal;
+  final int maxPct;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final bill = ref.watch(billControllerProvider);
+    final ctl = ref.read(billControllerProvider.notifier);
+    final problem = ref.watch(billDiscountProblemProvider);
+    final flat = bill.discountKind == DiscountKind.flat;
+
+    String helper() {
+      if (!flat) return 'Whole number, up to $maxPct%';
+      final max = 'max ${formatInr(maxFlatDiscount(subtotal, maxPct))}';
+      final d = bill.discount;
+      if (d is! FlatDiscount || d.amount.value <= 0 || subtotal.value <= 0) return 'Up to $maxPct% of the MRP · $max';
+      final tenths = divRound(d.amount.value * 1000, subtotal.value);
+      return '= ${tenths ~/ 10}.${tenths % 10}% of the MRP · $max';
+    }
+
+    return Wrap(
+      spacing: AppSpace.md,
+      runSpacing: AppSpace.sm,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(top: 22),
+          child: SegmentedPills<DiscountKind>(
+            semanticLabel: 'Discount as',
+            options: const [
+              PillOption(DiscountKind.percent, '%', tooltip: 'Percentage of the MRP'),
+              PillOption(DiscountKind.flat, '₹', tooltip: 'Flat rupees off the bill'),
+            ],
+            selected: bill.discountKind,
+            onChanged: ctl.setDiscountKind,
+          ),
+        ),
+        SizedBox(
+          width: 220,
+          child: AppTextField(
+            key: ValueKey('discount-input-${bill.discountKind.name}'),
+            fieldKey: const ValueKey('discount-input'),
+            label: flat ? 'Discount (₹)' : 'Discount (%)',
+            hint: flat ? 'e.g. 25' : 'e.g. 7',
+            value: bill.discountInput,
+            error: problem,
+            helper: problem == null ? helper() : null,
+            keyboardType: flat ? const TextInputType.numberWithOptions(decimal: true) : TextInputType.number,
+            inputFormatters: [FilteringTextInputFormatter.allow(RegExp(flat ? r'[0-9.]' : r'[0-9]'))],
+            autofocus: true,
+            onChanged: ctl.setDiscountInput,
+            // Enter would drop focus out of the billing shortcuts.
+            onSubmitted: (_) => ctl.requestSearchFocus(),
+          ),
+        ),
+      ],
     );
   }
 }

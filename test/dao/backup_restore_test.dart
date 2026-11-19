@@ -8,6 +8,7 @@ import 'package:rx_desk/core/db/daos/purchases_dao.dart';
 import 'package:rx_desk/core/db/daos/sales_dao.dart';
 import 'package:rx_desk/core/db/migrations.dart';
 import 'package:rx_desk/core/inventory/stock_adjust.dart';
+import 'package:rx_desk/core/money/gst.dart';
 import 'package:rx_desk/core/money/paise.dart';
 import 'package:rx_desk/core/sales/bill_rules.dart';
 import 'package:rx_desk/core/sales/return_rules.dart';
@@ -352,6 +353,32 @@ void main() {
     expect((await migrated.catalogDao.movementsOf(b)).single.note, '');
     await migrated.catalogDao.editBatch(b, countedQty: 48, reason: StockAdjustReason.lost, at: t0);
     expect((await migrated.catalogDao.movementsOf(b)).last.note, 'Lost / theft');
+  });
+
+  test('migration v9 → v10: invoices get discount_flat_paise; old bills stay % bills; a flat bill saves', () async {
+    final v9Path = '${dir.path}/v9.sqlite';
+    final db = fileDb(v9Path);
+    final (p, b) = await addMed(db, qty: 50);
+    await db.salesDao.saveBill(
+      SaveBillRequest(lines: [BillLineRequest(productId: p, batchId: b, qty: 1)], discount: const PercentDiscount(5)),
+      rules: const BillRules(),
+      at: t0,
+    );
+    await db.customStatement('ALTER TABLE invoices DROP COLUMN discount_flat_paise');
+    await db.customStatement('PRAGMA user_version = 9');
+    await db.close();
+
+    final migrated = fileDb(v9Path);
+    addTearDown(migrated.close);
+    expect((await migrated.customSelect('PRAGMA user_version').getSingle()).read<int>('user_version'), latestSchemaVersion);
+    final old = (await migrated.select(migrated.invoices).get()).single;
+    expect((old.discountPct, old.discountFlatPaise), (5, null));
+    final saved = await migrated.salesDao.saveBill(
+      SaveBillRequest(lines: [BillLineRequest(productId: p, batchId: b, qty: 2)], discount: const FlatDiscount(Paise(500))),
+      rules: const BillRules(),
+      at: t0,
+    );
+    expect((await migrated.salesDao.invoiceWithItems(saved.invoiceId))!.invoice.discountFlatPaise, 500);
   });
 }
 

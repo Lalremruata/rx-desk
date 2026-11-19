@@ -85,6 +85,9 @@ class DropSubstitutes extends DropMode {
   final List<StockRow> substitutes;
 }
 
+/// Manual discount entry: a whole percentage or a flat rupee amount.
+enum DiscountKind { percent, flat }
+
 @freezed
 abstract class BillState with _$BillState {
   const factory BillState({
@@ -97,7 +100,15 @@ abstract class BillState with _$BillState {
     @Default('') String customer,
     @Default('') String phone,
     @Default('') String doctor,
+    /// Chip discount (SPEC §4.6); used unless [discountCustom].
     @Default(0) int discountPct,
+
+    /// Manual discount: the cashier types a whole % or a flat ₹ amount.
+    @Default(false) bool discountCustom,
+    @Default(DiscountKind.percent) DiscountKind discountKind,
+
+    /// What was typed for the manual discount (whole % or rupees).
+    @Default('') String discountInput,
     @Default('Cash') String payment,
 
     /// Credit bills (SPEC §4.10): rupees typed in "Paid now", and how.
@@ -122,6 +133,18 @@ abstract class BillState with _$BillState {
   bool get hasRx => lines.any((l) => l.isRx);
   bool get isEmpty => lines.isEmpty;
   bool get isCredit => payment == creditMode;
+
+  /// The bill's discount. A blank manual entry is no discount; a value
+  /// that doesn't parse (e.g. "7.5" as %) is held back as -1 so validation
+  /// rejects it rather than silently giving none.
+  BillDiscount get discount {
+    if (!discountCustom) return PercentDiscount(discountPct);
+    final t = discountInput.trim();
+    return switch (discountKind) {
+      DiscountKind.percent => PercentDiscount(t.isEmpty ? 0 : (int.tryParse(t) ?? -1)),
+      DiscountKind.flat => FlatDiscount(t.isEmpty ? Paise.zero : (Paise.tryParse(t) ?? const Paise(-1))),
+    };
+  }
 
   /// Paid now, in paise (0 when blank or not a Credit bill).
   Paise get paidNowPaise => isCredit ? (Paise.tryParse(paidNow) ?? Paise.zero) : Paise.zero;

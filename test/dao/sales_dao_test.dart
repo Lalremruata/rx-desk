@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:rx_desk/core/db/app_database.dart';
 import 'package:rx_desk/core/db/daos/sales_dao.dart';
 import 'package:rx_desk/core/fy/fy.dart';
+import 'package:rx_desk/core/money/gst.dart';
 import 'package:rx_desk/core/money/paise.dart';
 import 'package:rx_desk/core/sales/bill_rules.dart';
 
@@ -13,7 +14,7 @@ void main() {
   tearDown(() => db.close());
 
   SaveBillRequest req(List<BillLineRequest> lines, {String? doctor, int disc = 0, String pay = 'UPI'}) =>
-      SaveBillRequest(lines: lines, customerName: 'Esther', customerPhone: '9800000001', doctorName: doctor, discountPct: disc, paymentMode: pay);
+      SaveBillRequest(lines: lines, customerName: 'Esther', customerPhone: '9800000001', doctorName: doctor, discount: PercentDiscount(disc), paymentMode: pay);
 
   group('saveBill — one transaction (CLAUDE.md rule 3)', () {
     test('writes invoice, snapshot items, stock, movements, summary and sequence', () async {
@@ -219,5 +220,57 @@ void main() {
       db.into(db.batches).insert(BatchesCompanion.insert(productId: p1, batchNo: 'PCM2611', expiry: '2027-01', qty: 1, createdAt: 0)),
       throwsA(isA<Exception>()),
     );
+  });
+
+  group('flat ₹ discount (SPEC §4.6)', () {
+    test('saves discount_flat_paise; line discounts sum to it; preview = saved', () async {
+      final (p1, b1) = await addMed(db, qty: 50); // ₹30.90, 12 %
+      final (p2, b2) = await addMed(db, name: 'Cetirizine 10 mg Tablet', salt: 'Cetirizine 10 mg', mrp: 2150, gst: 5, batch: 'CTZ01', qty: 40);
+      final lines = [BillLineRequest(productId: p1, batchId: b1, qty: 3), BillLineRequest(productId: p2, batchId: b2, qty: 2)];
+      final saved = await db.salesDao.saveBill(
+        SaveBillRequest(lines: lines, discount: const FlatDiscount(Paise(1000))),
+        rules: const BillRules(),
+        at: t0,
+      );
+      final doc = (await db.salesDao.invoiceWithItems(saved.invoiceId))!;
+      expect(doc.invoice.discountFlatPaise, 1000);
+      expect(doc.invoice.discountPct, 0);
+      expect(doc.invoice.discountPaise, 1000);
+      expect(doc.items.map((i) => i.discountPaise), [683, 317]); // 13570 split 9270 : 4300
+      expect(doc.items.fold<int>(0, (a, i) => a + i.discountPaise), 1000);
+      expect(invoiceDiscount(doc.invoice), const FlatDiscount(Paise(1000)));
+
+      final preview = discountedLines(
+        [(mrp: const Paise(3090), qty: 3, gstRate: 12, packSize: 1), (mrp: const Paise(2150), qty: 2, gstRate: 5, packSize: 1)],
+        const FlatDiscount(Paise(1000)),
+      );
+      expect(doc.items.map((i) => (i.netPaise, i.taxablePaise, i.taxPaise)), [for (final a in preview) (a.net.value, a.taxable.value, a.tax.value)]);
+      expect(doc.invoice.cgstPaise + doc.invoice.sgstPaise, doc.items.fold<int>(0, (a, i) => a + i.taxPaise));
+      expect(saved.totals.total.value, 12600); // 13570 − 1000 = 12570 → ₹126
+    });
+
+    test('a percent bill keeps discount_flat_paise null', () async {
+      final (p, b) = await addMed(db);
+      final saved = await db.salesDao.saveBill(req([BillLineRequest(productId: p, batchId: b, qty: 1)], disc: 5), rules: const BillRules(), at: t0);
+      final inv = (await db.salesDao.invoiceWithItems(saved.invoiceId))!.invoice;
+      expect((inv.discountPct, inv.discountFlatPaise), (5, null));
+      expect(invoiceDiscount(inv), const PercentDiscount(5));
+    });
+
+    test('over the cap or over 5 % without permission is refused; nothing is written', () async {
+      final (p, b) = await addMed(db); // ₹30.90 × 2 = ₹61.80; 15 % = ₹9.27
+      final lines = [BillLineRequest(productId: p, batchId: b, qty: 2)];
+      Future<SavedBill> sell(int flat, BillRules rules) =>
+          db.salesDao.saveBill(SaveBillRequest(lines: lines, discount: FlatDiscount(Paise(flat))), rules: rules, at: t0);
+      await expectLater(sell(928, const BillRules()), throwsA(isA<BillException>().having((e) => e.code, 'code', BillError.discountTooHigh)));
+      await expectLater(
+        sell(310, const BillRules(canGiveHighDiscount: false)), // 5.02 %
+        throwsA(isA<BillException>().having((e) => e.code, 'code', BillError.discountNotPermitted)),
+      );
+      expect(await countOf(db, 'invoices'), 0);
+      expect(await qtyOf(db, b), 100);
+      await sell(927, const BillRules());
+      expect(await countOf(db, 'invoices'), 1);
+    });
   });
 }

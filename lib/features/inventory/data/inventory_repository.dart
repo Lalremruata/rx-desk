@@ -36,6 +36,9 @@ class InventoryRepository {
 
   Stream<List<Manufacturer>> watchMakers() => _dao.watchManufacturers();
 
+  Future<List<SameNameProduct>> productsNamed(String name, {int? exceptProductId}) =>
+      _dao.productsNamed(name, exceptProductId: exceptProductId);
+
   Future<int> addProduct(NewProduct p, {int? staffId}) => _dao.addProduct(p, at: _now(), staffId: staffId);
 
   Future<ReceiveResult> receive({

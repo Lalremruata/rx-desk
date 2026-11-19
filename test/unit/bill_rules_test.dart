@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:rx_desk/core/money/gst.dart';
 import 'package:rx_desk/core/money/paise.dart';
 import 'package:rx_desk/core/sales/bill_rules.dart';
 import 'package:rx_desk/core/utils/expiry.dart';
@@ -82,7 +83,7 @@ void main() {
           lines: lines ?? const [BillLineRequest(productId: 1, batchId: 1, qty: 2)],
           factsByBatch: {1: f ?? facts()},
           rules: rules,
-          discountPct: disc,
+          discount: PercentDiscount(disc),
           doctorName: doctor,
           paymentMode: pay,
           at: now,
@@ -138,4 +139,51 @@ void main() {
   });
 
   test('normaliseSalt', () => expect(normaliseSalt('  Paracetamol   650 MG '), 'paracetamol 650 mg'));
+
+  group('discountError (SPEC §4.6)', () {
+    const owner = BillRules();
+    const cashier = BillRules(canGiveHighDiscount: false);
+    const sub = Paise(10000); // ₹100 MRP subtotal
+    BillError? code(BillDiscount d, {BillRules r = owner, Paise s = sub}) => discountError(d, s, r)?.$1;
+
+    test('percent: up to the max; above 5 % needs the permission', () {
+      expect(code(const PercentDiscount(15)), isNull);
+      expect(code(const PercentDiscount(16)), BillError.discountTooHigh);
+      expect(code(const PercentDiscount(-1)), BillError.discountTooHigh);
+      expect(code(const PercentDiscount(5), r: cashier), isNull);
+      expect(code(const PercentDiscount(6), r: cashier), BillError.discountNotPermitted);
+    });
+
+    test('flat ₹: held to the same % of the MRP subtotal', () {
+      expect(code(const FlatDiscount(Paise(1500))), isNull); // exactly 15 %
+      expect(code(const FlatDiscount(Paise(1501))), BillError.discountTooHigh);
+      expect(discountProblem(const FlatDiscount(Paise(1501)), sub, owner), 'Discount can be at most 15% of the MRP (₹15.00)');
+      expect(code(const FlatDiscount(Paise(500)), r: cashier), isNull); // exactly 5 %
+      expect(code(const FlatDiscount(Paise(501)), r: cashier), BillError.discountNotPermitted);
+      expect(discountProblem(const FlatDiscount(Paise(501)), sub, cashier), 'Your role can’t give more than 5% discount (₹5.00 on this bill)');
+      expect(code(const FlatDiscount(Paise(10001)), r: const BillRules(maxDiscountPct: 100)), BillError.discountTooHigh);
+      expect(code(const FlatDiscount(Paise(-1))), BillError.discountTooHigh);
+      expect(code(const FlatDiscount(Paise.zero), s: Paise.zero), isNull);
+      expect(code(const FlatDiscount(Paise(1)), s: Paise.zero), BillError.discountTooHigh);
+    });
+
+    test('validateBill checks a flat ₹ against the bill’s own subtotal', () {
+      void run(int flat) => validateBill(
+            lines: const [BillLineRequest(productId: 1, batchId: 1, qty: 2)], // 2 × ₹10
+            factsByBatch: {1: facts()},
+            rules: owner,
+            discount: FlatDiscount(Paise(flat)),
+            doctorName: null,
+            paymentMode: 'Cash',
+            at: now,
+          );
+      run(300);
+      expectError(() => run(301), BillError.discountTooHigh);
+    });
+
+    test('maxFlatDiscount', () {
+      expect(maxFlatDiscount(const Paise(3333), 15), const Paise(499));
+      expect(maxFlatDiscount(Paise.zero, 15), Paise.zero);
+    });
+  });
 }

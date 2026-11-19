@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:rx_desk/core/db/db_provider.dart';
+import 'package:rx_desk/core/money/gst.dart';
 import 'package:rx_desk/core/money/paise.dart';
 import 'package:rx_desk/core/widgets/widgets.dart';
 import 'package:rx_desk/features/billing/application/bill_controller.dart';
@@ -227,6 +228,67 @@ void main() {
     expect(c2.read(billControllerProvider).discountPct, 0);
     b2.setDiscount(5);
     expect(c2.read(billControllerProvider).discountPct, 5);
+  });
+
+  group('manual discount (SPEC §4.6)', () {
+    test('flat ₹: totals follow, over the cap is refused, saved as a flat bill', () async {
+      await search('crocin'); // ₹25.00
+      await bill.enter();
+      bill
+        ..useCustomDiscount()
+        ..setDiscountKind(DiscountKind.flat)
+        ..setDiscountInput('4');
+      expect(c.read(billDiscountProblemProvider), 'Discount can be at most 15% of the MRP (₹3.75)');
+      final refused = await bill.save();
+      expect((refused as BillRejected).message, contains('at most 15%'));
+      expect(st().lines, hasLength(1));
+
+      bill.setDiscountInput('3');
+      expect(c.read(billDiscountProblemProvider), isNull);
+      expect(c.read(billTotalsProvider).discount, const Paise(300));
+      expect(c.read(billTotalsProvider).total, const Paise(2200));
+      final r = await bill.save();
+      final saved = (r as BillSavedOutcome).saved;
+      final inv = (await c.read(appDatabaseProvider).salesDao.invoiceWithItems(saved.invoiceId))!.invoice;
+      expect((inv.discountFlatPaise, inv.discountPct, inv.discountPaise), (300, 0, 300));
+      expect((st().discountCustom, st().discountInput), (false, '')); // fresh bill
+    });
+
+    test('custom whole %: any value up to the max; decimals are refused', () async {
+      await search('crocin');
+      await bill.enter();
+      bill
+        ..useCustomDiscount()
+        ..setDiscountInput('7');
+      expect(st().discount, const PercentDiscount(7));
+      expect(c.read(billTotalsProvider).discount, const Paise(175));
+      bill.setDiscountInput('7.5');
+      expect(c.read(billDiscountProblemProvider), 'Enter a whole number of %');
+      expect(await bill.save(), isA<BillRejected>());
+      bill.setDiscountInput('16');
+      expect(c.read(billDiscountProblemProvider), 'Discount can be at most 15%');
+
+      // Switching kind clears the entry; a chip leaves manual entry.
+      bill.setDiscountKind(DiscountKind.flat);
+      expect((st().discountInput, st().discount), ('', const FlatDiscount(Paise.zero)));
+      bill.setDiscount(10);
+      expect((st().discountCustom, st().discount), (false, const PercentDiscount(10)));
+    });
+
+    test('a Cashier can’t type a ₹ amount above 5 % of the MRP', () async {
+      c = await make(user: const SessionUser(name: 'Cash', role: StaffRole.cashier));
+      bill = c.read(billControllerProvider.notifier);
+      await search('crocin');
+      await bill.enter();
+      bill
+        ..useCustomDiscount()
+        ..setDiscountKind(DiscountKind.flat)
+        ..setDiscountInput('1.26');
+      expect(c.read(billDiscountProblemProvider), 'Your role can’t give more than 5% discount (₹1.25 on this bill)');
+      expect(await bill.save(), isA<BillRejected>());
+      bill.setDiscountInput('1.25');
+      expect(await bill.save(), isA<BillSavedOutcome>());
+    });
   });
 }
 

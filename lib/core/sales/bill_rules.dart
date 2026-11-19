@@ -155,7 +155,7 @@ void validateBill({
   required List<BillLineRequest> lines,
   required Map<int, LineFacts> factsByBatch,
   required BillRules rules,
-  required int discountPct,
+  required BillDiscount discount,
   required String? doctorName,
   required String paymentMode,
   required DateTime at,
@@ -164,15 +164,11 @@ void validateBill({
   if (!billPaymentModes.contains(paymentMode)) {
     throw BillException(BillError.invalidPayment, 'Unknown payment mode $paymentMode');
   }
-  if (discountPct < 0 || discountPct > rules.maxDiscountPct) {
-    throw BillException(BillError.discountTooHigh, 'Discount can be at most ${rules.maxDiscountPct}%');
+  var subtotal = 0;
+  for (final l in lines) {
+    if (factsByBatch[l.batchId] case final f?) subtotal += proRataGross(f.mrp, l.qty, f.packSize).value;
   }
-  if (discountPct > BillRules.highDiscountThreshold && !rules.canGiveHighDiscount) {
-    throw const BillException(
-      BillError.discountNotPermitted,
-      'Your role can’t give more than ${BillRules.highDiscountThreshold}% discount',
-    );
-  }
+  if (discountError(discount, Paise(subtotal), rules) case (final code, final msg)) throw BillException(code, msg);
 
   _checkPrices(lines, factsByBatch);
 
@@ -238,20 +234,53 @@ void _checkPrices(List<BillLineRequest> lines, Map<int, LineFacts> factsByBatch)
 List<LineAmounts> amountsFor(
   List<BillLineRequest> lines,
   Map<int, LineFacts> facts, {
-  required int discountPct,
+  required BillDiscount discount,
   required bool gstRegistered,
 }) =>
-    [
-      for (final l in lines)
-        computeLine(
-          mrp: facts[l.batchId]!.mrp,
-          qty: l.qty,
-          discountPct: discountPct,
-          gstRate: facts[l.batchId]!.gstRate,
-          gstRegistered: gstRegistered,
-          packSize: facts[l.batchId]!.packSize,
-        ),
-    ];
+    discountedLines(
+      [
+        for (final l in lines)
+          (mrp: facts[l.batchId]!.mrp, qty: l.qty, gstRate: facts[l.batchId]!.gstRate, packSize: facts[l.batchId]!.packSize),
+      ],
+      discount,
+      gstRegistered: gstRegistered,
+    );
+
+/// Why [discount] can't be given on a bill whose MRP subtotal is
+/// [subtotal], or null when it can (SPEC §4.6). A flat ₹ amount is held to
+/// the same limits as a percentage via its share of the subtotal.
+(BillError, String)? discountError(BillDiscount discount, Paise subtotal, BillRules rules) {
+  const high = BillRules.highDiscountThreshold;
+  final max = rules.maxDiscountPct;
+  switch (discount) {
+    case PercentDiscount(:final pct):
+      if (pct < 0 || pct > max) return (BillError.discountTooHigh, 'Discount can be at most $max%');
+      if (pct > high && !rules.canGiveHighDiscount) {
+        return (BillError.discountNotPermitted, 'Your role can’t give more than $high% discount');
+      }
+    case FlatDiscount(:final amount):
+      final a = amount.value, sub = subtotal.value;
+      if (a < 0) return (BillError.discountTooHigh, 'Discount can’t be negative');
+      if (a == 0) return null;
+      // Integer comparisons: a ÷ sub ≤ max % ⇔ a × 100 ≤ max × sub.
+      if (a * 100 > max * sub) {
+        return (BillError.discountTooHigh, 'Discount can be at most $max% of the MRP (${formatInr(maxFlatDiscount(subtotal, max))})');
+      }
+      if (a * 100 > high * sub && !rules.canGiveHighDiscount) {
+        return (
+          BillError.discountNotPermitted,
+          'Your role can’t give more than $high% discount (${formatInr(maxFlatDiscount(subtotal, high))} on this bill)',
+        );
+      }
+  }
+  return null;
+}
+
+/// Message form of [discountError] for the billing screen.
+String? discountProblem(BillDiscount discount, Paise subtotal, BillRules rules) => discountError(discount, subtotal, rules)?.$2;
+
+/// Largest flat ₹ (paise) that stays within [pct] % of [subtotal].
+Paise maxFlatDiscount(Paise subtotal, int pct) => Paise(subtotal.value <= 0 ? 0 : subtotal.value * pct ~/ 100);
 
 // ---------------------------------------------------------------------------
 // FEFO + substitutes (SPEC §4.3)
