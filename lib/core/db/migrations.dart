@@ -7,7 +7,7 @@ import 'fts.dart';
 
 /// Current schema version. Every bump needs a step in [_steps] and a test in
 /// test/dao/migration_test.dart (CLAUDE.md rule 10).
-const int latestSchemaVersion = 11;
+const int latestSchemaVersion = 12;
 
 /// `_steps[v]` migrates schema v → v + 1.
 final Map<int, Future<void> Function(AppDatabase db, Migrator m)> _steps = {
@@ -115,6 +115,15 @@ final Map<int, Future<void> Function(AppDatabase db, Migrator m)> _steps = {
   // Existing medicines start unknown (null) and are asked on the next Box receipt.
   10: (db, m) async {
     if (!await _hasColumn(db, 'products', 'packs_per_box')) await m.addColumn(db.products, db.products.packsPerBox);
+  },
+  // v11 → v12: batch-wise MRP and purchase rate details (SPEC §4.5, §4.7).
+  // Every existing batch takes its medicine's current MRP.
+  11: (db, m) async {
+    if (!await _hasColumn(db, 'batches', 'mrp_paise')) await m.addColumn(db.batches, db.batches.mrpPaise);
+    await db.customStatement('UPDATE batches SET mrp_paise = (SELECT p.mrp_paise FROM products p WHERE p.id = batches.product_id) WHERE mrp_paise = 0');
+    for (final c in [db.receiptLines.freeQty, db.receiptLines.ratePaise, db.receiptLines.discBp, db.receiptLines.gstRate, db.receiptLines.mrpPaise]) {
+      if (!await _hasColumn(db, 'receipt_lines', c.name)) await m.addColumn(db.receiptLines, c);
+    }
   },
 };
 

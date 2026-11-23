@@ -38,9 +38,9 @@ class GuardedActions {
     return _ref.read(inventoryRepositoryProvider).addProduct(p, staffId: _staffId);
   }
 
-  Future<ReceiveResult> receiveStock({required int productId, required String batchNo, String? expiry, required int qty}) {
+  Future<ReceiveResult> receiveStock({required int productId, required String batchNo, String? expiry, required int qty, Paise? mrp}) {
     requirePermission(_ref, Permission.changeStock);
-    return _ref.read(inventoryRepositoryProvider).receive(productId: productId, batchNo: batchNo, expiry: expiry, qty: qty, staffId: _staffId);
+    return _ref.read(inventoryRepositoryProvider).receive(productId: productId, batchNo: batchNo, expiry: expiry, qty: qty, mrp: mrp, staffId: _staffId);
   }
 
   /// Units per pack (SPEC §4.9) — converts the product's batches.
@@ -51,9 +51,9 @@ class GuardedActions {
   }
 
   /// Edit medicine (SPEC §5.3).
-  Future<void> updateMedicine(int productId, ProductEdit e) {
+  Future<void> updateMedicine(int productId, ProductEdit e, {bool repriceBatches = false}) {
     requirePermission(_ref, Permission.changeStock);
-    return _ref.read(inventoryRepositoryProvider).updateProduct(productId, e);
+    return _ref.read(inventoryRepositoryProvider).updateProduct(productId, e, repriceBatches: repriceBatches);
   }
 
   /// Hide (take off sale) or unhide a medicine.
@@ -68,12 +68,13 @@ class GuardedActions {
     String? batchNo,
     String? expiry,
     int? countedQty,
+    Paise? mrp,
     StockAdjustReason? reason,
     String note = '',
   }) {
     requirePermission(_ref, Permission.changeStock);
     return _ref.read(inventoryRepositoryProvider).editBatch(batchId,
-        batchNo: batchNo, expiry: expiry, countedQty: countedQty, reason: reason, note: note, staffId: _staffId);
+        batchNo: batchNo, expiry: expiry, countedQty: countedQty, mrp: mrp, reason: reason, note: note, staffId: _staffId);
   }
 
   Future<void> setPackSize(int productId, int size) {

@@ -74,7 +74,17 @@ abstract class StockRow with _$StockRow {
     /// Any batch with qty > 0 within the expiry window (incl. expired).
     required bool expiring,
     required int batchCount,
+
+    /// MRP of the batch billing sells first (FEFO, in stock, not expired);
+    /// null when nothing is saleable. [mrp] is the medicine's latest MRP.
+    Paise? saleMrp,
+
+    /// Distinct MRPs among saleable batches (2+ → "2 MRPs" hint).
+    @Default(0) int mrpCount,
   }) = _StockRow;
+
+  /// The price the counter will charge first.
+  Paise get shownMrp => saleMrp ?? mrp;
 
   const StockRow._();
 

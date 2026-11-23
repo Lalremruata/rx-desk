@@ -268,7 +268,18 @@ class _ProductRow extends StatelessWidget {
                 ),
                 SizedBox(width: 60, child: Text(row.rack, style: AppType.small.copyWith(color: AppColors.body))),
                 SizedBox(width: 70, child: _StockText(row)),
-                SizedBox(width: 84, child: Text(formatInr(row.mrp), textAlign: TextAlign.right, style: AppType.bodyStrong)),
+                SizedBox(
+                  width: 84,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(formatInr(row.shownMrp), textAlign: TextAlign.right, style: AppType.bodyStrong),
+                      // Batches on the shelf carry different printed MRPs.
+                      if (row.mrpCount > 1) Text('${row.mrpCount} MRPs', style: AppType.caption.copyWith(color: StockColors.low)),
+                    ],
+                  ),
+                ),
               ],
             ),
           ),
@@ -414,7 +425,7 @@ class _BatchPicker extends ConsumerWidget {
               width: 80,
               child: Text(compactPackQty(b.qty, product.packSize, product.category), textAlign: TextAlign.right, style: AppType.smallStrong),
             ),
-            SizedBox(width: 90, child: Text(formatInr(product.mrp), textAlign: TextAlign.right, style: AppType.small)),
+            SizedBox(width: 90, child: Text(formatInr(b.mrp), textAlign: TextAlign.right, style: AppType.small)),
             const SizedBox(width: 14),
             Expanded(child: Align(alignment: Alignment.centerLeft, child: StatusBadge.tag(tag, tone: tone))),
           ],

@@ -35,7 +35,10 @@ class CatalogDao extends DatabaseAccessor<AppDatabase> with _$CatalogDaoMixin {
     (SELECT MIN(b.expiry) FROM batches b WHERE b.product_id = p.id AND b.qty > 0 AND b.expiry >= ?1) AS nearest,
     (SELECT MIN(b.expiry) FROM batches b WHERE b.product_id = p.id) AS earliest,
     (SELECT COUNT(*) FROM batches b WHERE b.product_id = p.id AND b.qty > 0 AND b.expiry <= ?2) AS expiring,
-    (SELECT COUNT(*) FROM batches b WHERE b.product_id = p.id) AS n_batches
+    (SELECT COUNT(*) FROM batches b WHERE b.product_id = p.id) AS n_batches,
+    (SELECT b.mrp_paise FROM batches b WHERE b.product_id = p.id AND b.qty > 0 AND b.expiry >= ?1
+       ORDER BY b.expiry, b.batch_no LIMIT 1) AS sale_mrp,
+    (SELECT COUNT(DISTINCT b.mrp_paise) FROM batches b WHERE b.product_id = p.id AND b.qty > 0 AND b.expiry >= ?1) AS n_mrps
   ''';
 
   static const String _from = 'FROM products p JOIN manufacturers m ON m.id = p.manufacturer_id';
@@ -65,6 +68,8 @@ class CatalogDao extends DatabaseAccessor<AppDatabase> with _$CatalogDaoMixin {
         earliestExpiry: r.readNullable<String>('earliest'),
         expiring: r.read<int>('expiring') > 0,
         batchCount: r.read<int>('n_batches'),
+        saleMrp: switch (r.readNullable<int>('sale_mrp')) { final v? when v > 0 => Paise(v), _ => null },
+        mrpCount: r.read<int>('n_mrps'),
       );
 
   List<Variable<Object>> _stockVars(DateTime now, int expiryWindowMonths) => [
@@ -131,7 +136,7 @@ class CatalogDao extends DatabaseAccessor<AppDatabase> with _$CatalogDaoMixin {
         if (!isValidExpiry(exp)) throw const CatalogException('Enter the first batch’s expiry month');
         if (np.openingQty < 0) throw const CatalogException('Opening quantity can’t be negative');
         final bid = await into(batches).insert(
-          BatchesCompanion.insert(productId: pid, batchNo: bno, expiry: exp, qty: np.openingQty, createdAt: ts),
+          BatchesCompanion.insert(productId: pid, batchNo: bno, expiry: exp, qty: np.openingQty, mrpPaise: Value(np.mrp.value), createdAt: ts),
         );
         if (np.openingQty != 0) {
           await _movement(bid, np.openingQty, 'opening', at: at, staffId: staffId, refType: 'product', refId: pid);
@@ -171,10 +176,18 @@ class CatalogDao extends DatabaseAccessor<AppDatabase> with _$CatalogDaoMixin {
   /// Edits a medicine's details (SPEC §5.3). Past bills keep their
   /// snapshots; new bills use the new MRP / GST / HSN. Units per pack is
   /// changed with [setPackSize]. Search follows via the FTS update trigger.
-  Future<void> updateProduct(int productId, ProductEdit e, {required DateTime at}) {
+  ///
+  /// MRP is per batch (SPEC §4.5): the medicine's MRP is the one new batches
+  /// get. With [repriceBatches], batches still at the old MRP take the new
+  /// one too (fixing a wrong MRP); other batches keep their printed MRP.
+  Future<void> updateProduct(int productId, ProductEdit e, {required DateTime at, bool repriceBatches = false}) {
     return transaction(() async {
       final p = await (select(products)..where((x) => x.id.equals(productId))).getSingleOrNull();
       if (p == null) throw const CatalogException('Medicine not found');
+      if (repriceBatches && e.mrp.value != p.mrpPaise) {
+        await (update(batches)..where((b) => b.productId.equals(productId) & b.mrpPaise.equals(p.mrpPaise)))
+            .write(BatchesCompanion(mrpPaise: Value(e.mrp.value)));
+      }
       _checkDetails(name: e.name, category: e.category, schedule: e.schedule, gstRate: e.gstRate, mrp: e.mrp);
       if (e.reorderLevel < 0) throw const CatalogException('Reorder level can’t be negative');
       _checkPacksPerBox(e.packsPerBox);
@@ -219,6 +232,7 @@ class CatalogDao extends DatabaseAccessor<AppDatabase> with _$CatalogDaoMixin {
     String? batchNo,
     String? expiry,
     int? countedQty,
+    Paise? mrp,
     StockAdjustReason? reason,
     String note = '',
     required DateTime at,
@@ -231,7 +245,9 @@ class CatalogDao extends DatabaseAccessor<AppDatabase> with _$CatalogDaoMixin {
       final changeNo = bno != null && bno != b.batchNo;
       final changeExpiry = expiry != null && expiry != b.expiry;
       final changeQty = countedQty != null && countedQty != b.qty;
-      if (!changeNo && !changeExpiry && !changeQty) throw const CatalogException('Nothing to change');
+      final changeMrp = mrp != null && mrp.value != b.mrpPaise;
+      if (!changeNo && !changeExpiry && !changeQty && !changeMrp) throw const CatalogException('Nothing to change');
+      if (changeMrp && mrp.value <= 0) throw const CatalogException('Enter the MRP printed on the batch');
 
       if (changeNo) {
         if (bno.isEmpty) throw const CatalogException('Enter the batch number');
@@ -257,8 +273,14 @@ class CatalogDao extends DatabaseAccessor<AppDatabase> with _$CatalogDaoMixin {
           batchNo: changeNo ? Value(bno) : const Value.absent(),
           expiry: changeExpiry ? Value(expiry) : const Value.absent(),
           qty: changeQty ? Value(countedQty) : const Value.absent(),
+          mrpPaise: changeMrp ? Value(mrp.value) : const Value.absent(),
         ),
       );
+      if (changeMrp) {
+        // A zero-quantity movement keeps the price change in the batch's history.
+        await _movement(batchId, 0, 'mrp', at: at, staffId: staffId, refType: 'batch', refId: batchId,
+            note: 'MRP ${formatInr(Paise(b.mrpPaise))} → ${formatInr(mrp)}');
+      }
       if (changeQty) {
         await _movement(batchId, countedQty - b.qty, 'adjust',
             at: at, staffId: staffId, refType: 'batch', refId: batchId, note: adjustNote(reason!, note));
@@ -304,6 +326,7 @@ class CatalogDao extends DatabaseAccessor<AppDatabase> with _$CatalogDaoMixin {
     required DateTime at,
     int? staffId,
     Paise? purchaseRate,
+    Paise? mrp,
     String? refType,
     int? refId,
   }) {
@@ -311,6 +334,7 @@ class CatalogDao extends DatabaseAccessor<AppDatabase> with _$CatalogDaoMixin {
       final bno = batchNo.trim().toUpperCase();
       if (bno.isEmpty) throw const CatalogException('Enter the batch number');
       if (qty < 1) throw const CatalogException('Enter the quantity received');
+      if (mrp != null && mrp.value <= 0) throw const CatalogException('Enter the MRP printed on the batch');
       final product = await (select(products)..where((p) => p.id.equals(productId))).getSingleOrNull();
       if (product == null) throw const CatalogException('Medicine not found');
       final existing = await (select(batches)
@@ -320,12 +344,17 @@ class CatalogDao extends DatabaseAccessor<AppDatabase> with _$CatalogDaoMixin {
       int bid;
       int newQty;
       if (existing != null) {
+        // One batch number, one printed MRP (SPEC §4.5).
+        if (mrp != null && existing.mrpPaise > 0 && mrp.value != existing.mrpPaise) {
+          throw CatalogException('Batch $bno is ${formatInr(Paise(existing.mrpPaise))} MRP — a different MRP needs its own batch number');
+        }
         bid = existing.id;
         newQty = existing.qty + qty;
         await (update(batches)..where((b) => b.id.equals(bid))).write(BatchesCompanion(qty: Value(newQty)));
       } else {
         if (expiry == null || !isValidExpiry(expiry)) throw const CatalogException('New batch — enter its expiry');
         newQty = qty;
+        final batchMrp = mrp ?? Paise(product.mrpPaise);
         bid = await into(batches).insert(
           BatchesCompanion.insert(
             productId: productId,
@@ -333,9 +362,14 @@ class CatalogDao extends DatabaseAccessor<AppDatabase> with _$CatalogDaoMixin {
             expiry: expiry,
             qty: qty,
             purchaseRatePaise: Value(purchaseRate?.value),
+            mrpPaise: Value(batchMrp.value),
             createdAt: ts,
           ),
         );
+        // The medicine's MRP follows the newest batch (SPEC §4.5).
+        if (batchMrp.value != product.mrpPaise) {
+          await (update(products)..where((p) => p.id.equals(productId))).write(ProductsCompanion(mrpPaise: Value(batchMrp.value)));
+        }
       }
       await _movement(bid, qty, 'receive', at: at, staffId: staffId, refType: refType ?? 'batch', refId: refType == null ? bid : refId);
       await (update(products)..where((p) => p.id.equals(productId))).write(ProductsCompanion(updatedAt: Value(ts)));
@@ -638,12 +672,12 @@ class CatalogDao extends DatabaseAccessor<AppDatabase> with _$CatalogDaoMixin {
     return InventoryPage(rows: rows.map(_row).toList(), total: total, ms: _ms(sw));
   }
 
-  /// Σ saleable × MRP over active products (MRP is per pack of
+  /// Σ saleable × batch MRP over active products (MRP is per pack of
   /// units_per_pack units).
   Future<Paise> stockValue({required DateTime now}) async {
     final r = await customSelect(
       '''
-      SELECT COALESCE(SUM(b.qty * p.mrp_paise / p.units_per_pack), 0) AS v
+      SELECT COALESCE(SUM(b.qty * b.mrp_paise / p.units_per_pack), 0) AS v
       FROM batches b JOIN products p ON p.id = b.product_id
       WHERE p.is_active = 1 AND b.qty > 0 AND b.expiry >= ?1
       ''',

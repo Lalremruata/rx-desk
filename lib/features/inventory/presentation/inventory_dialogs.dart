@@ -112,6 +112,10 @@ class _AddMedicineDialogState extends ConsumerState<AddMedicineDialog> {
   late String reorder = '${_e?.reorderLevel ?? ref.read(settingsProvider).defaultReorderLevel}';
   late String size = '${_e?.packSize ?? 1}';
   late String perBox = _e?.packsPerBox == null ? '' : '${_e!.packsPerBox}';
+
+  /// Edit medicine, new MRP: batches still at the old MRP take it too
+  /// (fixing a wrong MRP). Off: only new batches get it (SPEC §4.5).
+  bool repriceBatches = true;
   late bool sizeEdited = _editing;
   late int gst = _e?.gstRate ?? 12;
 
@@ -232,6 +236,7 @@ class _AddMedicineDialogState extends ConsumerState<AddMedicineDialog> {
               rack: rack.trim(),
               packsPerBox: _perBox,
             ),
+            repriceBatches: repriceBatches,
           );
       final filter = ref.read(inventoryFilterProvider);
       if (filter.search == p.name && name.trim() != p.name) ref.read(inventoryFilterProvider.notifier).setSearch(name.trim());
@@ -251,6 +256,9 @@ class _AddMedicineDialogState extends ConsumerState<AddMedicineDialog> {
     final digits = [FilteringTextInputFormatter.digitsOnly];
     final e = _e;
     final priceChanged = e != null && (Paise.tryParse(mrp) != e.mrp || gst != e.gstRate || hsn.trim() != e.hsn);
+    final newMrp = Paise.tryParse(mrp);
+    final mrpChanged = e != null && newMrp != null && newMrp.value > 0 && newMrp != e.mrp;
+    final atOldMrp = !mrpChanged ? 0 : (ref.watch(productBatchesProvider(e.id)).value ?? const <StockBatch>[]).where((b) => b.mrpPaise == e.mrp.value).length;
     Widget f(String key, String label, String hint, String value, ValueChanged<String> set,
             {List<TextInputFormatter>? fmt, TextInputType? kb, bool autofocus = false, FocusNode? focus}) =>
         AppTextField(
@@ -324,7 +332,7 @@ class _AddMedicineDialogState extends ConsumerState<AddMedicineDialog> {
             f('reorder', _size > 1 ? 'Reorder level (${PackNouns.of(category).packs})' : 'Reorder level', '20', reorder,
                 (v) => reorder = v,
                 fmt: digits, kb: TextInputType.number),
-            f('mrp', 'MRP (₹, incl. GST)', '0.00', mrp, (v) => mrp = v,
+            f('mrp', _editing ? 'MRP for new batches (₹, incl. GST)' : 'MRP (₹, incl. GST)', '0.00', mrp, (v) => mrp = v,
                 fmt: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))], kb: const TextInputType.numberWithOptions(decimal: true)),
             _Pills<int>(
               label: 'GST rate',
@@ -338,6 +346,14 @@ class _AddMedicineDialogState extends ConsumerState<AddMedicineDialog> {
                 fmt: digits, kb: TextInputType.number),
           ],
         ),
+        if (atOldMrp > 0)
+          ToggleRow(
+            key: const ValueKey('edit-medicine-reprice'),
+            label: 'Also change the $atOldMrp ${atOldMrp == 1 ? 'batch' : 'batches'} at ${formatInr(e!.mrp)} to ${formatInr(newMrp!)}',
+            help: 'On: fixes a wrong MRP. Off: batches on the shelf keep their printed MRP; only new batches get the new one.',
+            value: repriceBatches,
+            onChanged: (v) => setState(() => repriceBatches = v),
+          ),
         if (e != null)
           Text(
             priceChanged
@@ -397,10 +413,17 @@ class ReceiveStockDialog extends ConsumerStatefulWidget {
 
 class _ReceiveStockDialogState extends ConsumerState<ReceiveStockDialog> {
   String batch = '', expiry = '', qty = '';
+  // MRP printed on a new batch (SPEC §4.5); starts at the medicine's latest.
+  late String mrp = widget.product.mrp.toInputString();
   Map<String, String> errors = const {};
   bool saving = false;
 
   StockRow get _p => widget.product;
+
+  bool get _isNewMrp {
+    final m = Paise.tryParse(mrp);
+    return m != null && m.value > 0 && m != _p.mrp;
+  }
 
   StockBatch? _existing(List<StockBatch> batches) {
     final b = batch.trim().toUpperCase();
@@ -416,6 +439,7 @@ class _ReceiveStockDialogState extends ConsumerState<ReceiveStockDialog> {
       if (batch.trim().isEmpty) 'batch': 'Enter the batch number',
       if ((int.tryParse(qty) ?? 0) < 1) 'qty': 'Enter the quantity received',
       if (batch.trim().isNotEmpty && existing == null && parseExpiryInput(expiry) == null) 'expiry': 'New batch — enter its expiry (MM/YYYY)',
+      if (existing == null && (Paise.tryParse(mrp)?.value ?? 0) <= 0) 'mrp': 'Enter the MRP printed on the pack',
     };
     setState(() => errors = e);
     if (e.isNotEmpty) return;
@@ -428,6 +452,7 @@ class _ReceiveStockDialogState extends ConsumerState<ReceiveStockDialog> {
             batchNo: batch,
             expiry: existing == null ? parseExpiryInput(expiry) : null,
             qty: n,
+            mrp: existing == null ? Paise.tryParse(mrp) : null,
           );
       ref.read(expandedProductsProvider.notifier).open(widget.product.id);
       ref
@@ -481,8 +506,22 @@ class _ReceiveStockDialogState extends ConsumerState<ReceiveStockDialog> {
               error: errors['expiry'],
               onChanged: (v) => setState(() => expiry = v),
             ),
-            FieldSpan(
-              child: AppTextField(
+            AppTextField(
+              key: const ValueKey('recv-mrp'),
+              label: 'MRP (₹, on the pack)',
+              value: existing != null ? Paise(existing.mrpPaise).toInputString() : mrp,
+              enabled: existing == null,
+              error: errors['mrp'],
+              helper: existing != null
+                  ? 'Batch ${existing.batchNo} keeps its own MRP'
+                  : _isNewMrp
+                  ? 'New MRP — older batches keep theirs'
+                  : null,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
+              onChanged: (v) => setState(() => mrp = v),
+            ),
+            AppTextField(
                 key: const ValueKey('recv-qty'),
                 label: _p.sellsLoose ? 'Quantity received (${PackNouns.of(_p.category).packs} of ${_p.packSize})' : 'Quantity received',
                 hint: 'e.g. 50',
@@ -493,7 +532,6 @@ class _ReceiveStockDialogState extends ConsumerState<ReceiveStockDialog> {
                 onChanged: (v) => setState(() => qty = v),
                 onSubmitted: (_) => _save(batches),
               ),
-            ),
           ],
         ),
         Text(hint, style: AppType.caption),
@@ -635,6 +673,7 @@ class _EditBatchDialogState extends ConsumerState<EditBatchDialog> {
   late String expiry = expiryToInput(_b.expiry);
   late String packs = _b.qty < 0 ? '0' : '${splitPack(_b.qty, _p.packSize).$1}';
   late String loose = _b.qty < 0 ? '0' : '${splitPack(_b.qty, _p.packSize).$2}';
+  late String mrp = Paise(_b.mrpPaise).toInputString();
   StockAdjustReason? reason;
   String note = '';
   Map<String, String> errors = const {};
@@ -660,10 +699,13 @@ class _EditBatchDialogState extends ConsumerState<EditBatchDialog> {
         'qty': _p.sellsLoose ? 'Whole numbers; loose ${PackNouns.of(_p.category).units} fewer than ${_p.packSize}' : 'Whole number',
       if (_qtyChanged && reason == null) 'reason': 'Pick a reason',
       if (_qtyChanged && (reason?.needsNote ?? false) && note.trim().isEmpty) 'note': 'Say why',
+      if ((Paise.tryParse(mrp)?.value ?? 0) <= 0) 'mrp': 'The MRP printed on this batch',
     };
     setState(() => errors = e);
     if (e.isNotEmpty) return;
-    if (no == _b.batchNo && exp == _b.expiry && !_qtyChanged) {
+    final newMrp = Paise.tryParse(mrp)!;
+    final mrpChanged = newMrp.value != _b.mrpPaise;
+    if (no == _b.batchNo && exp == _b.expiry && !_qtyChanged && !mrpChanged) {
       Navigator.of(context).pop();
       return;
     }
@@ -674,6 +716,7 @@ class _EditBatchDialogState extends ConsumerState<EditBatchDialog> {
             batchNo: no,
             expiry: exp,
             countedQty: _qtyChanged ? counted : null,
+            mrp: mrpChanged ? newMrp : null,
             reason: _qtyChanged ? reason : null,
             note: note,
           );
@@ -727,6 +770,16 @@ class _EditBatchDialogState extends ConsumerState<EditBatchDialog> {
               helper: expired ? 'Expired — locked; expired stock can’t be sold' : null,
               keyboardType: TextInputType.datetime,
               onChanged: (v) => setState(() => expiry = v),
+            ),
+            AppTextField(
+              key: const ValueKey('edit-batch-mrp'),
+              label: 'MRP (₹, on the pack)',
+              value: mrp,
+              error: errors['mrp'],
+              helper: 'Fix a typing mistake; new stock at a new MRP goes in a new batch',
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
+              onChanged: (v) => setState(() => mrp = v),
             ),
             AppTextField(
               key: const ValueKey('edit-batch-packs'),

@@ -72,15 +72,26 @@ the stockist's bill.
    - **Medicine**. If the item was ordered as free text, RxDesk asks you to *"Pick the medicine it
      is, or add it to the catalogue"*. This link is remembered. If you choose **Add new medicine**
      here, the form has no opening-stock fields, because this receipt line adds the stock.
-   - **Qty received** and **Unit**.
+   - **Qty received** and **Unit**: the quantity you are charged for.
+   - **Free**: free / scheme goods in the same unit (for example the 1 in *10 + 1*). They go into
+     stock but cost nothing, and they don't count against the order.
    - **Strips per box**: only for a line in **Box**. See
      [Receiving in boxes](#receiving-in-boxes-strips-per-box) below.
+   - **Rate per Strip / Box (₹)**: the rate on their bill before GST (PTR), **Disc %** (trade
+     discount, decimals allowed, e.g. 7.5) and **GST %** (starts at the medicine's rate). These
+     are optional. With a rate, RxDesk fills in the **Amount**: rate × qty, less the discount, plus
+     GST.
    - **Batch no.**: an existing batch adds to it (*"Adding to batch …"*). A new number creates a
      new batch, which needs an **Expiry** (MM/YYYY).
+   - **MRP (₹, on the pack)**: for a new batch, the MRP printed on it (starts at the medicine's
+     MRP). If it differs, the line says *"New MRP — … becomes ₹…; older batches keep theirs"*. An
+     existing batch keeps its own MRP.
    - **Add to stock**: how many strips (or packs) go into stock. It is filled in from the
-     quantity: one per Strip, Bottle, Tube and so on, or quantity × strips per box for Box. You
+     quantity plus free: one per Strip, Bottle, Tube and so on, or × strips per box for Box. You
      can change it.
-   - **Amount (₹)**: the line amount *as on their invoice*.
+   - **Amount (₹)**: the line amount *as on their invoice*. If you type a different amount from
+     the one worked out from the rate, RxDesk shows *"Worked out ₹… from the rate"* so you can
+     check. Under the line you also see the **cost per strip**, free goods included.
    - **Still expecting more from this order**: turn it off if the rest isn't coming, and the line is
      closed short. If the unit differs from the order (ordered 1 Box, got 10 Strip), the line is
      complete unless you turn this on.
@@ -123,7 +134,7 @@ the stock for you.
 - You can also set or correct the number in **Inventory › Edit medicine › Strips per box**.
 - For loose-sold medicines, stock is still typed in strips. RxDesk converts it to tablets itself.
 
-![Receiving 10 Box of a free-text order line: strips per box and the stock it adds](images/05-receive-box.png)
+![Receiving 10 Box + 1 free of a free-text order line: strips per box, rate, discount, GST and the batch MRP](images/05-receive-box.png)
 
 Things to know:
 
@@ -131,7 +142,8 @@ Things to know:
   received."*
 - **An expiry inside your warning window** is allowed, with a warning.
 - **The same stockist + invoice number can't be entered twice.**
-- **There is no GST calculation on purchases.** Amounts are stored exactly as entered.
+- **Amounts are stored exactly as entered.** The rate, discount and GST only fill the amount in.
+  The invoice total you owe is still the total *as billed*.
 
 ## Order book
 

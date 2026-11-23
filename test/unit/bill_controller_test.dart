@@ -201,7 +201,7 @@ void main() {
     expect(st().lines.single.mrp, const Paise(2500));
     final db = c.read(appDatabaseProvider);
     final pid = st().lines.single.productId;
-    await db.customStatement('UPDATE products SET mrp_paise = 2800 WHERE id = $pid');
+    await db.customStatement('UPDATE batches SET mrp_paise = 2800 WHERE product_id = $pid');
 
     final r = await bill.save();
     expect(r, isA<BillRejected>());

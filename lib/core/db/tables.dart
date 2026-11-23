@@ -54,6 +54,11 @@ class Batches extends Table {
   TextColumn get expiry => text()();
   IntColumn get qty => integer()();
   IntColumn get purchaseRatePaise => integer().nullable()();
+
+  /// v12: the MRP printed on this batch, per pack (SPEC §4.5). Batches of one
+  /// medicine can carry different MRPs; each sells at its own. Set on every
+  /// insert (0 only in old test fixtures; billing refuses it).
+  IntColumn get mrpPaise => integer().withDefault(const Constant(0))();
   IntColumn get createdAt => integer()();
 
   @override
@@ -353,8 +358,24 @@ class ReceiptLines extends Table {
   /// Sale units added to the batch.
   IntColumn get stockUnits => integer()();
 
-  /// Line amount as printed on the stockist's invoice (no GST maths).
+  /// Line amount as on the stockist's invoice: worked out from rate, disc
+  /// and GST when given (SPEC §4.7), but stored as entered.
   IntColumn get amountPaise => integer()();
+
+  /// v12 (SPEC §4.7): free / scheme quantity in [unit] (stock, no cost).
+  IntColumn get freeQty => integer().withDefault(const Constant(0))();
+
+  /// v12: rate per [unit] before discount and GST (PTR). Null = not given.
+  IntColumn get ratePaise => integer().nullable()();
+
+  /// v12: trade discount in basis points (7.5 % = 750).
+  IntColumn get discBp => integer().withDefault(const Constant(0))();
+
+  /// v12: GST % on the stockist's line. Null = not given.
+  IntColumn get gstRate => integer().nullable()();
+
+  /// v12: the batch's MRP at receipt (snapshot).
+  IntColumn get mrpPaise => integer().nullable()();
 }
 
 // ---------------------------------------------------------------------------

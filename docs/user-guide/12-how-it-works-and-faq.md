@@ -109,8 +109,14 @@ Use **Edit batch** (the pencil on the batch row) to fix it. An expiry that has a
 is locked, because expired stock can never be sold.
 
 **The MRP of a medicine changed.**
-Use **Inventory › Edit medicine**. The new MRP applies to new bills only; saved bills keep
-their old price.
+When new stock arrives at a new MRP, receive it as a **new batch** and type the new MRP on the
+line. The medicine's MRP moves to the new one, and the older packs keep selling at their own
+printed MRP. To fix an MRP that was typed wrong, use **Edit batch** (one batch) or **Edit
+medicine** with **Also change the N batches** on. Saved bills always keep their old price.
+
+**The stockist gave free goods (10 + 1).**
+On the receipt line, type 10 in **Qty received** and 1 in **Free**. All 11 go into stock, and the
+cost per strip is worked out over the 11.
 
 **We stopped selling a medicine.**
 Use **Hide medicine**. It leaves search and the stock lists but nothing is deleted; bring it

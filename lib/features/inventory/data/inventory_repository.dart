@@ -46,14 +46,16 @@ class InventoryRepository {
     required String batchNo,
     String? expiry,
     required int qty,
+    Paise? mrp,
     int? staffId,
   }) =>
-      _dao.receiveStock(productId: productId, batchNo: batchNo, expiry: expiry, qty: qty, at: _now(), staffId: staffId);
+      _dao.receiveStock(productId: productId, batchNo: batchNo, expiry: expiry, qty: qty, mrp: mrp, at: _now(), staffId: staffId);
 
   /// Packs per product (consumption register "Apply suggested").
   Future<int> setReorderLevels(Map<int, int> levels) => _dao.setReorderLevels(levels, at: _now());
 
-  Future<void> updateProduct(int productId, ProductEdit e) => _dao.updateProduct(productId, e, at: _now());
+  Future<void> updateProduct(int productId, ProductEdit e, {bool repriceBatches = false}) =>
+      _dao.updateProduct(productId, e, at: _now(), repriceBatches: repriceBatches);
 
   Future<void> setProductActive(int productId, bool active) => _dao.setProductActive(productId, active, at: _now());
 
@@ -62,12 +64,13 @@ class InventoryRepository {
     String? batchNo,
     String? expiry,
     int? countedQty,
+    Paise? mrp,
     StockAdjustReason? reason,
     String note = '',
     int? staffId,
   }) =>
       _dao.editBatch(batchId,
-          batchNo: batchNo, expiry: expiry, countedQty: countedQty, reason: reason, note: note, at: _now(), staffId: staffId);
+          batchNo: batchNo, expiry: expiry, countedQty: countedQty, mrp: mrp, reason: reason, note: note, at: _now(), staffId: staffId);
 
   Stream<List<StockMovement>> watchRecentMovements(int batchId, {int limit = 5}) =>
       _dao.watchRecentMovements(batchId, limit: limit);

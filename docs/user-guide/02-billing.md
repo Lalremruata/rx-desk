@@ -32,6 +32,8 @@ the Billing screen to jump to it.
 - Each result shows the name (with a red **H** or **H1** badge for prescription medicines), salt ·
   maker · pack, the rack, the stock and the MRP.
   - Stock in **green** means enough stock. **Amber "N left"** means stock is low. **Red "Out"** means out of stock.
+  - The MRP shown is the MRP of the batch that will be sold first. **"2 MRPs"** under it means the
+    batches in stock carry different MRPs.
 - No match? *"No medicine matches. Try the salt name, or press Esc to clear."*
 
 ![Search results while typing](images/02-billing-search.png)
@@ -49,9 +51,12 @@ RxDesk sells the batch that expires first ("First Expiry, First Out", FEFO):
   tagged **Near expiry** or **OK**.
 - **Expired batches** appear at the bottom, greyed out, tagged **Expired · blocked**. They can never
   be sold, and no setting changes that.
+- **Each batch sells at the MRP printed on it.** When the price of a medicine changes, old and new
+  batches can sit on the shelf together at different MRPs. The list shows each batch's MRP, and the
+  bill line uses that batch's MRP, so an old pack is never charged at the new, higher price.
 - Press `Esc` to close the list without choosing.
 
-![The Choose batch list, with the batch that expires first highlighted](images/02-billing-batches.png)
+![The Choose batch list: the batch that expires first is highlighted, and each batch shows its own MRP](images/02-billing-batches.png)
 
 Adding the same batch again increases its quantity, up to the stock in that batch.
 

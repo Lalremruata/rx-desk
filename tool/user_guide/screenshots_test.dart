@@ -173,6 +173,9 @@ Future<void> _extras(AppDatabase db) async {
     at: DateTime(2026, 10),
   );
 
+  // A price revision: new stock of product 1 at a higher MRP (SPEC §4.5).
+  await db.catalogDao.receiveStock(productId: 1, batchNo: 'PCM2710', expiry: '2028-10', qty: 60, mrp: const Paise(3240), at: DateTime(2026, 11, 2));
+
   final pd = db.purchasesDao;
   final oct = DateTime(2026, 10, 2, 11);
   // Older orders, received in October.
@@ -270,10 +273,11 @@ void main() {
   });
 
   testWidgets('02-billing-batches', (tester) async {
-    await _open(tester, '/billing');
-    await tester.enterText(find.byKey(const ValueKey('billing-search')), 'paracetamol 650');
+    final db = await _open(tester, '/billing');
+    // Product 1 has batches at two MRPs (see _extras); scan its barcode.
+    final barcode = (await tester.runAsync(() => db.customSelect('SELECT barcode FROM products WHERE id = 1').getSingle()))!.read<String>('barcode');
+    await tester.enterText(find.byKey(const ValueKey('billing-search')), barcode);
     await _run(tester, 300);
-    await _key(tester, LogicalKeyboardKey.arrowDown);
     await _key(tester, LogicalKeyboardKey.enter);
     await _shot(tester, '02-billing-batches');
   });
@@ -402,10 +406,12 @@ void main() {
     await _type(tester, 'recv-invoice', 'LDC/2611/052');
     await _type(tester, 'recv-link-0', 'dolo');
     await _tap(tester, find.byKey(ValueKey('pick-$dolo')));
+    await _type(tester, 'recv-free-0', '1');
     await _type(tester, 'recv-perbox-0', '15');
+    await _type(tester, 'recv-rate-0', '320');
+    await _type(tester, 'recv-disc-0', '5');
     await _type(tester, 'recv-batch-0', 'DOBS3051');
     await _type(tester, 'recv-expiry-0', '06/2028');
-    await _type(tester, 'recv-amount-0', '3250');
     await _reveal(tester, find.byKey(const ValueKey('recv-perbox-0')), alignment: 0.25);
     await _shot(tester, '05-receive-box');
   });

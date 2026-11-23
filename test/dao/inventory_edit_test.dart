@@ -91,13 +91,13 @@ void main() {
   group('price changed while a bill was open', () {
     test('a stale MRP or GST is refused with the current prices; matching prices save', () async {
       final (pid, bid) = await addMed(db, qty: 10);
-      await db.catalogDao.updateProduct(pid, edit(await row(pid), mrp: 3360), at: t0);
+      await db.catalogDao.updateProduct(pid, edit(await row(pid), mrp: 3360), at: t0, repriceBatches: true);
       final stale = SaveBillRequest(
         lines: [BillLineRequest(productId: pid, batchId: bid, qty: 1, expectedMrp: const Paise(3090), expectedGstRate: 12)],
       );
       await expectLater(
         db.salesDao.saveBill(stale, rules: const BillRules(), at: t0),
-        throwsA(isA<PriceChangedException>().having((e) => e.changes[pid], 'change', (mrp: const Paise(3360), gstRate: 12))),
+        throwsA(isA<PriceChangedException>().having((e) => e.changes[bid], 'change', (mrp: const Paise(3360), gstRate: 12))),
       );
       expect(await qtyOf(db, bid), 10);
       expect(await countOf(db, 'invoices'), 0);

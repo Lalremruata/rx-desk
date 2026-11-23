@@ -33,7 +33,7 @@ StockRow row({int saleable = 50, int reorder = 20, bool expiring = false, int? l
     );
 
 StockBatch batch(int id, String exp, int qty) =>
-    StockBatch(id: id, productId: 1, batchNo: 'B$id', expiry: exp, qty: qty, createdAt: 0);
+    StockBatch(id: id, productId: 1, batchNo: 'B$id', expiry: exp, qty: qty, mrpPaise: 3090, createdAt: 0);
 
 void main() {
   group('stockStatus (prototype precedence)', () {

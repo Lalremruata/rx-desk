@@ -172,7 +172,7 @@ Future<SeedReport> seedDemoData(
       for (final b in p.batches) {
         final opening = b.targetQty + b.sold;
         b.id = await db.into(db.batches).insert(
-              BatchesCompanion.insert(productId: p.id!, batchNo: b.batchNo, expiry: b.expiry, qty: opening, createdAt: openTs),
+              BatchesCompanion.insert(productId: p.id!, batchNo: b.batchNo, expiry: b.expiry, qty: opening, mrpPaise: Value(p.mrpPaise), createdAt: openTs),
             );
         batchCount++;
         if (opening != 0) {

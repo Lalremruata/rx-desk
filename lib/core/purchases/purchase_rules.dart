@@ -1,6 +1,7 @@
 /// Purchases / order book rules (SPEC §4.7). Pure Dart — no Drift, no Flutter.
 library;
 
+import '../money/gst.dart';
 import '../money/paise.dart';
 import '../utils/expiry.dart';
 
@@ -128,6 +129,38 @@ ExpiryCheck receiveExpiryCheck(String expiry, DateTime now, int expiryWindowMont
   if (isExpired(expiry, now)) return ExpiryCheck.expired;
   if (monthsLeft(expiry, now) <= expiryWindowMonths) return ExpiryCheck.near;
   return ExpiryCheck.ok;
+}
+
+/// A stockist line's amount from its rate (SPEC §4.7): rate × qty, less the
+/// trade discount, plus GST — each step rounded to the paisa. Free goods
+/// cost nothing. The receive line prefills its amount from this; the amount
+/// saved is what the user leaves there ("as on their bill").
+Paise purchaseLineAmount({required int qty, required Paise rate, int discBp = 0, int gstRate = 0}) {
+  if (qty <= 0 || rate.value <= 0) return Paise.zero;
+  final gross = rate.value * qty;
+  final disc = divRound(gross * discBp, 10000);
+  final taxable = gross - disc;
+  return Paise(taxable + divRound(taxable * gstRate, 100));
+}
+
+/// Most a trade discount can be, in basis points (100 %).
+const int maxDiscBp = 10000;
+
+/// "7.5" / "7.50" / "10" (%) → basis points (750, 1000); null if not a
+/// number with at most two decimals. '' → 0.
+int? parsePercentBp(String input) {
+  final s = input.trim();
+  if (s.isEmpty) return 0;
+  final m = RegExp(r'^(\d{1,3})(?:\.(\d{1,2}))?$').firstMatch(s);
+  if (m == null) return null;
+  return int.parse(m[1]!) * 100 + int.parse((m[2] ?? '').padRight(2, '0'));
+}
+
+/// 750 → "7.5", 1000 → "10".
+String formatPercentBp(int bp) {
+  final whole = bp ~/ 100, frac = bp % 100;
+  if (frac == 0) return '$whole';
+  return '$whole.${frac.toString().padLeft(2, '0').replaceFirst(RegExp(r'0$'), '')}';
 }
 
 /// Units that hold several packs (strips) — the receive line asks how many.

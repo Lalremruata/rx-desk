@@ -35,6 +35,11 @@ class ReceiveLineInput {
     required this.amount,
     this.moreExpected = false,
     this.packsPerBox,
+    this.freeQty = 0,
+    this.rate,
+    this.discBp = 0,
+    this.gstRate,
+    this.mrp,
   });
 
   /// Null for an item that wasn't on an order.
@@ -55,6 +60,22 @@ class ReceiveLineInput {
 
   /// "Still expecting more" for a short line.
   final bool moreExpected;
+
+  /// Free / scheme quantity in [unit]; already included in [stockUnits].
+  final int freeQty;
+
+  /// Rate per [unit] before discount and GST (PTR); null = not given.
+  final Paise? rate;
+
+  /// Trade discount in basis points.
+  final int discBp;
+
+  /// GST % on their line; null = not given.
+  final int? gstRate;
+
+  /// MRP printed on the batch. A new batch takes it (else the medicine's);
+  /// an existing batch must match.
+  final Paise? mrp;
 }
 
 class ReceiveRequest {
@@ -434,6 +455,11 @@ class PurchasesDao extends DatabaseAccessor<AppDatabase> with _$PurchasesDaoMixi
         if (!purchaseUnits.contains(l.unit)) throw PurchaseException('$name — unknown unit ${l.unit}');
         if (l.stockUnits < 1) throw PurchaseException('$name — enter the units to add to stock');
         if (l.amount.value < 0) throw PurchaseException('$name — amount can’t be negative');
+        if (l.freeQty < 0) throw PurchaseException('$name — free quantity can’t be negative');
+        if (l.rate != null && l.rate!.value < 0) throw PurchaseException('$name — rate can’t be negative');
+        if (l.discBp < 0 || l.discBp > maxDiscBp) throw PurchaseException('$name — discount must be 0–100 %');
+        if (l.gstRate case final g? when !const [0, 5, 12, 18, 28].contains(g)) throw PurchaseException('$name — GST must be 0, 5, 12, 18 or 28 %');
+        if (l.mrp case final m? when m.value <= 0) throw PurchaseException('$name — enter the MRP printed on the batch');
         if (l.packsPerBox case final n? when unitNeedsPacksPerBox(l.unit)) {
           if (n < 1 || n > maxPacksPerBox) throw PurchaseException('$name — strips per box must be 1–$maxPacksPerBox');
           if (n != product.packsPerBox) {
@@ -473,6 +499,7 @@ class PurchasesDao extends DatabaseAccessor<AppDatabase> with _$PurchasesDaoMixi
           at: at,
           staffId: staffId,
           purchaseRate: purchaseRate(l.amount, l.stockUnits),
+          mrp: l.mrp,
           refType: 'purchase',
           refId: receiptId,
         );
@@ -490,6 +517,11 @@ class PurchasesDao extends DatabaseAccessor<AppDatabase> with _$PurchasesDaoMixi
             unit: l.unit,
             stockUnits: l.stockUnits,
             amountPaise: l.amount.value,
+            freeQty: Value(l.freeQty),
+            ratePaise: Value(l.rate?.value),
+            discBp: Value(l.discBp),
+            gstRate: Value(l.gstRate),
+            mrpPaise: Value((await (select(batches)..where((b) => b.id.equals(r.batchId))).getSingle()).mrpPaise),
           ),
         );
         // Stockist directory (SPEC §4.11): remember where it came from.

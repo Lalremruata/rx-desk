@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:rx_desk/core/db/app_database.dart';
 import 'package:rx_desk/core/db/daos/purchases_dao.dart';
 import 'package:rx_desk/core/db/db_provider.dart';
+import 'package:rx_desk/core/money/paise.dart';
 import 'package:rx_desk/core/widgets/widgets.dart';
 
 import '../helpers/pump_app.dart';
@@ -209,5 +210,44 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('pick-1')));
     await _run(tester, 100);
     expect((field('recv-perbox-0'), field('recv-units-0')), ('15', '30'));
+  });
+
+  testWidgets('receive with rate details: amount from rate, free goods in stock, a new batch MRP is saved', (tester) async {
+    final c = await pumpApp(
+      tester,
+      location: '/purchases',
+      setUpDb: (db) async {
+        await _seed(db);
+        await db.purchasesDao.addOrderLines('2026-11-09', [const NewOrderLine(productId: 1, itemName: '', qty: 10, unit: 'Strip')], at: t0);
+      },
+    );
+    String field(String key) => tester.widget<TextField>(find.byKey(ValueKey(key))).controller!.text;
+    await _run(tester);
+    await tester.ensureVisible(find.byKey(const ValueKey('receive-line-1')));
+    await _run(tester, 100);
+    await tester.tap(find.byKey(const ValueKey('receive-line-1')));
+    await _run(tester);
+    await _type(tester, 'recv-supplier', 'FMT Pharmacy');
+    await _type(tester, 'recv-invoice', 'FP/601/26-27');
+    await _type(tester, 'recv-free-0', '1');
+    expect(field('recv-units-0'), '11');
+    await _type(tester, 'recv-rate-0', '20');
+    await _type(tester, 'recv-disc-0', '5');
+    expect(field('recv-amount-0'), '212.80'); // 200 − 10 + 12 % GST
+    expect(find.byKey(const ValueKey('recv-cost-0')), findsOneWidget);
+    await _type(tester, 'recv-batch-0', 'PCM2701');
+    await _type(tester, 'recv-expiry-0', '01/2029');
+    expect(field('recv-mrp-0'), '30.90');
+    await _type(tester, 'recv-mrp-0', '33.60');
+    expect(find.byKey(const ValueKey('recv-mrpnote-0')), findsOneWidget);
+    await tester.ensureVisible(find.byKey(const ValueKey('recv-save-invoice')));
+    await tester.tap(find.byKey(const ValueKey('recv-save-invoice')));
+    await _run(tester);
+    expect(_toasts(c).last, startsWith('Invoice FP/601/26-27 saved'));
+    final db = c.read(appDatabaseProvider);
+    final b = (await tester.runAsync(() => db.catalogDao.batchesOf(1)))!.firstWhere((x) => x.batchNo == 'PCM2701');
+    expect((b.qty, b.mrpPaise), (11, 3360));
+    final p = (await tester.runAsync(() => db.catalogDao.stockRow(1, now: t0)))!;
+    expect(p.mrp, const Paise(3360));
   });
 }

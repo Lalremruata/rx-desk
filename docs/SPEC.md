@@ -93,7 +93,8 @@ products       id PK, name, salt, form, category, pack, manufacturer_id FK,
                category ∈ Tablet | Capsule | Syrup | Injection | Topical | OTC
 
 batches        id PK, product_id FK, batch_no, expiry TEXT 'YYYY-MM', qty INT,
-               purchase_rate_paise INT NULL, created_at
+               purchase_rate_paise INT NULL, created_at,
+               mrp_paise INT (per pack, as printed on the batch)                -- v12
                UNIQUE(product_id, batch_no)
 
 customers      id PK, name, phone NULL UNIQUE-ish (index), created_at
@@ -149,7 +150,9 @@ purchase_receipts id PK, supplier_id FK, invoice_no, received_date TEXT 'YYYY-MM
                total_paise INT, staff_id NULL, created_at   UNIQUE(supplier_id, invoice_no)
 receipt_lines  id PK, receipt_id FK, line_no, order_line_id FK NULL, product_id FK,
                batch_id FK, item_name, batch_no, expiry (snapshots), qty INT, unit TEXT,
-               stock_units INT, amount_paise INT
+               stock_units INT, amount_paise INT,
+               free_qty INT DEFAULT 0, rate_paise INT NULL, disc_bp INT DEFAULT 0,  -- v12
+               gst_rate INT NULL, mrp_paise INT NULL (batch MRP snapshot)
 
 -- v4: stockist dues (§4.8)
 suppliers          + credit_days INT DEFAULT 30
@@ -305,7 +308,17 @@ Adding the same batch again increments qty, capped at the batch's qty (toast if 
 
 ### 4.5 Stock
 
-- Receive stock: into an existing batch (adds qty) or a new batch (needs batch no + expiry).
+- **MRP is per batch** (v12). Batches of one medicine can carry different printed MRPs (price
+  revisions); each sells at its own, and selling an old batch above its printed MRP is never
+  possible. `products.mrp_paise` is the medicine's latest MRP: new batches start from it, and it
+  **follows the newest batch** — receiving a new batch at a different MRP updates it (older
+  batches keep theirs). One batch number has one MRP: receiving into an existing batch at a
+  different MRP is refused ("needs its own batch number"). Billing search and Inventory show the
+  MRP of the batch FEFO sells first, with an "N MRPs" hint when saleable batches differ; the
+  batch picker shows each batch's MRP. Stock value = Σ qty × batch MRP. A batch with MRP 0
+  (only possible in old test data) can't be billed.
+- Receive stock: into an existing batch (adds qty) or a new batch (needs batch no + expiry +
+  MRP, prefilled with the medicine's).
 - Every change writes a `stock_movements` row. Saleable stock is always derivable from batches;
   movements are the audit trail.
 - Cancelling an invoice restores stock to the same batches (`reason='cancel'`) and sets status.
@@ -358,8 +371,14 @@ Adding the same batch again increments qty, capped at the batch's qty (toast if 
   is not chosen at order time — whoever supplies it is recorded on receipt.
 - A **receipt** is one stockist invoice (stockist, invoice no, received date) with one or more
   lines. Each line: product, qty + unit received, batch no (existing or new), expiry (new batch
-  only), **stock units** (sale units added to the batch, prefilled from qty) and the amount as
-  printed on the stockist's invoice. Lines need not come from an order (unordered extras).
+  only), **MRP** (new batch only, prefilled with the medicine's; §4.5), **stock units** (sale
+  units added to the batch, prefilled from qty + free) and the amount as on the stockist's
+  invoice. Lines need not come from an order (unordered extras).
+- **Rate details** (v12, optional): **Free** qty (scheme goods, same unit; added to stock, no
+  cost, not counted against the order), **Rate** per unit before GST (PTR), **Disc %** (up to two
+  decimals, stored in basis points) and **GST %** (prefilled from the medicine). With a rate the
+  amount is prefilled as rate × qty − disc + GST, each step rounded to the paisa, and stays
+  editable to match their bill (a difference is shown).
 - **Boxes → strips.** For a line in unit **Box** the line also asks *Strips per box* (packs per
   box; "Packs per box" for non-tablets), prefilled from `products.packs_per_box`. Stock units
   are prefilled as qty × strips per box (e.g. 10 Box × 15 = 150 strips) and stay editable; a
@@ -371,8 +390,10 @@ Adding the same batch again increments qty, capped at the batch's qty (toast if 
   order-line statuses. Duplicate (stockist, invoice no) is rejected.
 - Expiry already past → blocked (rule: expired stock is never sold, so never received).
   Inside the expiry window → allowed with a warning.
-- **No GST maths on purchases.** Amounts are stored as entered (paise). For a new batch,
-  `purchase_rate_paise` = amount ÷ stock units, rounded to the paisa (informational).
+- **Purchase amounts are stored as entered** (paise); the rate details only prefill them, and
+  the bill total is still "as billed" (§4.8). No input-tax-credit reports (out of scope). For a
+  new batch, `purchase_rate_paise` = amount ÷ stock units (free goods included), rounded to the
+  paisa — the cost per unit.
 - Order-line status: `cancelled` / `closed` are manual and final. Otherwise, from receipt lines
   in the **same unit**: none → `pending`, Σ qty < ordered → `part`, ≥ ordered → `received`
   (over-supply is allowed and shown as "Over"). A receipt in a different unit (ordered 1 Box,
@@ -507,13 +528,17 @@ net of returns, by day; current product names). For each medicine in a month:
 All of these need `changeStock` and run in one transaction each.
 - **Edit medicine**: every Add-medicine field except the first batch and units per pack (that
   stays with "Sell loose…", §4.9). Same validation; the barcode may not belong to another
-  medicine. Saved bills keep their snapshots (rule 8); a new MRP / GST rate / HSN applies to new
-  bills only. Search follows the change (FTS triggers).
+  medicine. Saved bills keep their snapshots (rule 8); a new GST rate / HSN applies to new
+  bills only. Search follows the change (FTS triggers). The MRP field is the **MRP for new
+  batches**; when it changes, a toggle (on by default) "Also change the N batches at ₹old"
+  reprices batches still at the old MRP — for fixing a wrong MRP. Off: batches on the shelf
+  keep their printed MRP.
 - **Price changed during a bill**: each bill line sends the MRP and GST rate the counter showed.
-  If the medicine was edited since, saving is refused (`priceChanged`), the bill's lines take
-  the current MRP / GST, and the cashier checks the new total and saves again — the amount
-  collected always equals the amount saved.
-- **Edit batch**: batch number (upper-cased, unique per medicine), expiry, and the quantity
+  If the batch's MRP or the medicine's GST changed since, saving is refused (`priceChanged`,
+  keyed by batch), the bill's lines take the current MRP / GST, and the cashier checks the new
+  total and saves again — the amount collected always equals the amount saved.
+- **Edit batch**: batch number (upper-cased, unique per medicine), **MRP** (to fix a typo; writes
+  a zero-quantity `mrp` movement "MRP ₹old → ₹new"), expiry, and the quantity
   counted on the shelf. **An expired batch's expiry can't be changed** (rule 5: expired stock
   can never be sold); its quantity can still be corrected (e.g. to 0 when disposed of).
   A quantity change needs a reason — Count correction, Damaged, Lost / theft, Other (Other needs

@@ -78,6 +78,7 @@ String movementLabel(String reason) => switch (reason) {
       'supplier_return' => 'Returned to stockist',
       'write_off' => 'Written off',
       'repack' => 'Pack size changed',
+      'mrp' => 'MRP changed',
       _ => reason,
     };
 

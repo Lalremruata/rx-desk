@@ -333,7 +333,19 @@ class _Grid extends ConsumerWidget {
           color: stockLevel == StockLevel.ok ? p.accent : null,
         ),
       ),
-      Text(formatInr(r.mrp), style: AppType.bodyStrong.copyWith(fontFeatures: AppType.tabular)),
+      r.mrpCount > 1
+          ? Tooltip(
+              message: '${r.mrpCount} MRPs on the shelf — each batch sells at its own (see batches)',
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(formatInr(r.shownMrp), style: AppType.bodyStrong.copyWith(fontFeatures: AppType.tabular)),
+                  Text('${r.mrpCount} MRPs', style: AppType.caption.copyWith(color: StockColors.low)),
+                ],
+              ),
+            )
+          : Text(formatInr(r.shownMrp), style: AppType.bodyStrong.copyWith(fontFeatures: AppType.tabular)),
       Text(r.rack.isEmpty ? '—' : r.rack, style: AppType.small.copyWith(color: AppColors.body)),
       hiddenView ? const StatusBadge('Hidden') : StatusBadge(status, tone: tone),
       hiddenView
@@ -549,7 +561,7 @@ class _BatchPanel extends ConsumerWidget {
               style: AppType.bodyStrong.copyWith(fontWeight: FontWeight.w700),
             ),
           ),
-          SizedBox(width: 90, child: Text(formatInr(Paise(row.mrp.value)), textAlign: TextAlign.right, style: AppType.small)),
+          SizedBox(width: 90, child: Text(formatInr(Paise(b.mrpPaise)), textAlign: TextAlign.right, style: AppType.small)),
           const SizedBox(width: 12),
           Expanded(child: Align(alignment: Alignment.centerLeft, child: StatusBadge.tag(note, tone: tone))),
           if (canEdit)

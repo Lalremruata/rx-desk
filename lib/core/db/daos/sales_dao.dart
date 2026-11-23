@@ -355,7 +355,7 @@ class SalesDao extends DatabaseAccessor<AppDatabase> with _$SalesDaoMixin {
     final rows = await customSelect(
       '''
       SELECT b.id, b.product_id, b.batch_no, b.expiry, b.qty,
-             p.name, p.salt, p.category, p.hsn, p.schedule, p.gst_rate, p.mrp_paise, p.is_active, p.units_per_pack,
+             p.name, p.salt, p.category, p.hsn, p.schedule, p.gst_rate, b.mrp_paise, p.is_active, p.units_per_pack,
              m.name AS maker
       FROM batches b JOIN products p ON p.id = b.product_id JOIN manufacturers m ON m.id = p.manufacturer_id
       WHERE b.id IN ($marks)

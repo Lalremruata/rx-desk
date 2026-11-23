@@ -406,6 +406,36 @@ void main() {
     expect((await migrated.catalogDao.stockRow(p, now: t0))!.packsPerBox, 15);
     expect(await qtyOf(migrated, b), 150);
   });
+
+  test('migration v11 → v12: batches get their medicine’s MRP; receipt lines get rate columns', () async {
+    final v11Path = '${dir.path}/v11.sqlite';
+    final db = fileDb(v11Path);
+    final (p, b) = await addMed(db, mrp: 4550, qty: 10);
+    await db.purchasesDao.receive(
+      ReceiveRequest(
+        supplierName: 'Life Drugs Centre',
+        invoiceNo: 'OLD1',
+        receivedDate: '2026-09-02',
+        lines: [ReceiveLineInput(productId: p, batchNo: 'PCM2611', qty: 1, unit: 'Strip', stockUnits: 1, amount: const Paise(3000))],
+      ),
+      at: t0,
+      now: t0,
+    );
+    await db.customStatement('ALTER TABLE batches DROP COLUMN mrp_paise');
+    for (final c in ['free_qty', 'rate_paise', 'disc_bp', 'gst_rate', 'mrp_paise']) {
+      await db.customStatement('ALTER TABLE receipt_lines DROP COLUMN $c');
+    }
+    await db.customStatement('PRAGMA user_version = 11');
+    await db.close();
+
+    final migrated = fileDb(v11Path);
+    addTearDown(migrated.close);
+    expect((await migrated.customSelect('PRAGMA user_version').getSingle()).read<int>('user_version'), latestSchemaVersion);
+    expect((await (migrated.select(migrated.batches)..where((x) => x.id.equals(b))).getSingle()).mrpPaise, 4550);
+    final line = await migrated.select(migrated.receiptLines).getSingle();
+    expect((line.freeQty, line.ratePaise, line.discBp, line.gstRate, line.mrpPaise), (0, null, 0, null, null));
+    expect((await migrated.catalogDao.stockRow(p, now: t0))!.saleMrp, const Paise(4550));
+  });
 }
 
 /// Turns a current database back into v7: stockist directory gone.

@@ -81,4 +81,17 @@ void main() {
     expect(defaultStockPacks(qty: 3, unit: 'Bottle'), 3);
     expect(defaultStockPacks(qty: 0, unit: 'Box', packsPerBox: 15), isNull);
   });
+
+  test('purchase line amount: rate × qty − disc + GST, each step to the paisa', () {
+    expect(purchaseLineAmount(qty: 10, rate: const Paise(2000), discBp: 500, gstRate: 12), const Paise(21280));
+    expect(purchaseLineAmount(qty: 3, rate: const Paise(1999), discBp: 750, gstRate: 5), const Paise(5824)); // 59.97 − 4.50 = 55.47 + 2.77 GST
+    expect(purchaseLineAmount(qty: 1, rate: const Paise(1000)), const Paise(1000));
+    expect(purchaseLineAmount(qty: 0, rate: const Paise(1000)), Paise.zero);
+  });
+
+  test('percent ↔ basis points', () {
+    expect([parsePercentBp(''), parsePercentBp('7.5'), parsePercentBp('10'), parsePercentBp('12.25')], [0, 750, 1000, 1225]);
+    expect([parsePercentBp('7.555'), parsePercentBp('x'), parsePercentBp('-1')], [null, null, null]);
+    expect([formatPercentBp(750), formatPercentBp(1000), formatPercentBp(1225), formatPercentBp(5)], ['7.5', '10', '12.25', '0.05']);
+  });
 }

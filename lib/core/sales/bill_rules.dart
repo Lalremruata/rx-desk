@@ -87,7 +87,7 @@ class BillException implements Exception {
 class PriceChangedException extends BillException {
   const PriceChangedException(this.changes, String message) : super(BillError.priceChanged, message);
 
-  /// productId → the current (MRP, GST rate).
+  /// batchId → the current (MRP, GST rate). MRP is per batch (SPEC §4.5).
   final Map<int, ({Paise mrp, int gstRate})> changes;
 }
 
@@ -179,6 +179,9 @@ void validateBill({
     if (f == null) throw const BillException(BillError.notFound, 'Item or batch no longer exists');
     if (l.qty <= 0) throw BillException(BillError.invalidQty, 'Quantity for ${f.productName} must be at least 1');
     if (!f.isActive) throw BillException(BillError.inactiveProduct, '${f.productName} is no longer sold');
+    if (f.mrp.value <= 0) {
+      throw BillException(BillError.notFound, 'Batch ${f.batchNo} of ${f.productName} has no MRP — set it in Inventory › Edit batch');
+    }
     if (f.schedule == 'X') {
       throw BillException(BillError.scheduleX, '${f.productName} is Schedule X — it can’t be sold from RxDesk');
     }
@@ -219,11 +222,11 @@ void _checkPrices(List<BillLineRequest> lines, Map<int, LineFacts> factsByBatch)
   final names = <String>[];
   for (final l in lines) {
     final f = factsByBatch[l.batchId];
-    if (f == null || changes.containsKey(l.productId)) continue;
+    if (f == null || changes.containsKey(l.batchId)) continue;
     final mrpChanged = l.expectedMrp != null && l.expectedMrp != f.mrp;
     final gstChanged = l.expectedGstRate != null && l.expectedGstRate != f.gstRate;
     if (!mrpChanged && !gstChanged) continue;
-    changes[l.productId] = (mrp: f.mrp, gstRate: f.gstRate);
+    changes[l.batchId] = (mrp: f.mrp, gstRate: f.gstRate);
     names.add(mrpChanged ? 'MRP of ${f.productName} is now ${formatInr(f.mrp)}' : 'GST of ${f.productName} is now ${f.gstRate}%');
   }
   if (changes.isEmpty) return;
@@ -287,12 +290,15 @@ Paise maxFlatDiscount(Paise subtotal, int pct) => Paise(subtotal.value <= 0 ? 0 
 
 /// A batch as seen by the batch picker.
 class BatchOption {
-  const BatchOption({required this.batchId, required this.batchNo, required this.expiry, required this.qty});
+  const BatchOption({required this.batchId, required this.batchNo, required this.expiry, required this.qty, this.mrp = Paise.zero});
 
   final int batchId;
   final String batchNo;
   final String expiry;
   final int qty;
+
+  /// The MRP printed on this batch (SPEC §4.5).
+  final Paise mrp;
 }
 
 /// Result of picking a product at the counter.
@@ -340,7 +346,7 @@ BatchPick pickBatches(
     }
     if (b.qty > 0) anyStock = true;
     final left = b.qty - (inBill[b.batchId] ?? 0);
-    if (left > 0) valid.add(BatchOption(batchId: b.batchId, batchNo: b.batchNo, expiry: b.expiry, qty: left));
+    if (left > 0) valid.add(BatchOption(batchId: b.batchId, batchNo: b.batchNo, expiry: b.expiry, qty: left, mrp: b.mrp));
   }
   int byExpiry(BatchOption a, BatchOption b) {
     final c = a.expiry.compareTo(b.expiry);

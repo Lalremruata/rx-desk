@@ -598,22 +598,52 @@ class _DraftReceiveLine {
   String stockUnits = '';
   bool stockUnitsEdited = false;
   String amount = '';
+  bool amountEdited = false;
   bool moreExpected;
+
+  // Rate details (SPEC §4.7): free goods, rate per unit, trade discount, GST.
+  String free = '';
+  String rate = '';
+  String disc = '';
+  String gst = '';
+
+  /// MRP printed on a new batch (an existing batch keeps its own).
+  String mrp = '';
 
   bool get needsPacksPerBox => unitNeedsPacksPerBox(unit);
 
-  /// Sets the medicine, taking its remembered strips per box.
+  int get paidQty => int.tryParse(qty) ?? 0;
+  int get freeQty => int.tryParse(free) ?? 0;
+
+  /// Amount worked out from the rate, or null without a rate.
+  Paise? get computedAmount {
+    final r = Paise.tryParse(rate);
+    final d = parsePercentBp(disc);
+    if (r == null || r.value <= 0 || d == null) return null;
+    return purchaseLineAmount(qty: paidQty, rate: r, discBp: d, gstRate: int.tryParse(gst) ?? 0);
+  }
+
+  /// Sets the medicine, taking its remembered strips per box, GST and MRP.
   void setProduct(StockRow? p) {
     product = p;
     if (p?.packsPerBox case final n?) packsPerBox = '$n';
-    recomputeStock();
+    if (p != null) {
+      gst = '${p.gstRate}';
+      mrp = p.mrp.toInputString();
+    }
+    recompute();
   }
 
-  /// "Add to stock" follows qty × strips per box until the user types it.
-  void recomputeStock() {
-    if (stockUnitsEdited) return;
-    final n = defaultStockPacks(qty: int.tryParse(qty) ?? 0, unit: unit, packsPerBox: int.tryParse(packsPerBox));
-    stockUnits = n == null ? '' : '$n';
+  /// "Add to stock" follows (qty + free) × strips per box, and the amount
+  /// follows the rate, until the user types them.
+  void recompute() {
+    if (!stockUnitsEdited) {
+      final n = defaultStockPacks(qty: paidQty + freeQty, unit: unit, packsPerBox: int.tryParse(packsPerBox));
+      stockUnits = n == null ? '' : '$n';
+    }
+    if (!amountEdited) {
+      if (computedAmount case final a?) amount = a.toInputString();
+    }
   }
 }
 
@@ -692,8 +722,12 @@ class _ReceiveInvoiceDialogState extends ConsumerState<ReceiveInvoiceDialog> {
       }
       if (l.batch.trim().isEmpty) e['$k-batch'] = 'Batch no.';
       if (l.amount.trim().isNotEmpty && Paise.tryParse(l.amount) == null) e['$k-amount'] = 'Amount';
+      if (l.free.trim().isNotEmpty && int.tryParse(l.free) == null) e['$k-free'] = 'Whole number';
+      if (l.rate.trim().isNotEmpty && Paise.tryParse(l.rate) == null) e['$k-rate'] = 'Rate, e.g. 18.50';
+      if (parsePercentBp(l.disc) case final d when d == null || d > maxDiscBp) e['$k-disc'] = '0–100, e.g. 7.5';
       final batches = l.product == null ? null : ref.read(productBatchesProvider(l.product!.id)).value;
       final existing = _existingBatch(l, batches);
+      if (existing == null && (Paise.tryParse(l.mrp)?.value ?? 0) <= 0) e['$k-mrp'] = 'MRP on the pack';
       final exp = existing?.expiry ?? parseExpiryInput(l.expiry);
       if (l.batch.trim().isNotEmpty && exp == null) {
         e['$k-expiry'] = 'MM/YYYY';
@@ -750,6 +784,12 @@ class _ReceiveInvoiceDialogState extends ConsumerState<ReceiveInvoiceDialog> {
                     amount: Paise.tryParse(l.amount) ?? Paise.zero,
                     moreExpected: l.moreExpected,
                     packsPerBox: l.needsPacksPerBox ? int.tryParse(l.packsPerBox) : null,
+                    freeQty: l.freeQty,
+                    rate: Paise.tryParse(l.rate),
+                    discBp: parsePercentBp(l.disc) ?? 0,
+                    gstRate: int.tryParse(l.gst),
+                    // An existing batch keeps its own MRP.
+                    mrp: _existingBatch(l, ref.read(productBatchesProvider(l.product!.id)).value) == null ? Paise.tryParse(l.mrp) : null,
                   ),
               ],
               billTotal: _billTotal,
@@ -1077,12 +1117,24 @@ class _ReceiveLineCard extends ConsumerWidget {
     final short = o != null && line.unit == o.unit && o.receivedSameUnit + (int.tryParse(line.qty) ?? 0) < o.qty;
     final otherUnit = o != null && line.unit != o.unit;
     final nouns = PackNouns.of(p?.category ?? '');
-    final boxQty = int.tryParse(line.qty) ?? 0;
+    final boxQty = line.paidQty;
+    final free = line.freeQty;
     final perBox = int.tryParse(line.packsPerBox) ?? 0;
+    final qtyText = '${qtyLabel(boxQty, line.unit)}${free > 0 ? ' + $free free' : ''}';
     final boxMaths = p == null || !line.needsPacksPerBox || boxQty < 1 || perBox < 1 || perBox > maxPacksPerBox
         ? null
-        : '${qtyLabel(boxQty, line.unit)} × $perBox = ${formatCount(boxQty * perBox)} ${nouns.packWord(boxQty * perBox)}'
+        : '$qtyText × $perBox = ${formatCount((boxQty + free) * perBox)} ${nouns.packWord((boxQty + free) * perBox)}'
               '${p.packsPerBox == perBox ? '' : ' · $perBox per box will be remembered for ${p.name}'}';
+    // Cost per strip, free goods included (SPEC §4.7).
+    final packs = int.tryParse(line.stockUnits) ?? 0;
+    final amt = Paise.tryParse(line.amount);
+    final perPack = p == null || amt == null || amt.value <= 0 || packs < 1 ? null : purchaseRate(amt, packs);
+    final computed = line.computedAmount;
+    final amountNote = computed != null && amt != null && computed != amt ? 'Worked out ${formatInr(computed)} from the rate' : null;
+    final newMrp = Paise.tryParse(line.mrp);
+    final mrpNote = p != null && existing == null && newMrp != null && newMrp.value > 0 && newMrp != p.mrp
+        ? 'New MRP — ${p.name} becomes ${formatInr(newMrp)}; older batches keep theirs'
+        : null;
 
     final batchHint = p == null
         ? null
@@ -1161,7 +1213,7 @@ class _ReceiveLineCard extends ConsumerWidget {
                   inputFormatters: digits,
                   onChanged: (v) => _set(recompute: true, () {
                     line.qty = v;
-                    line.recomputeStock();
+                    line.recompute();
                   }),
                 ),
                 AppDropdown<String>(
@@ -1171,7 +1223,20 @@ class _ReceiveLineCard extends ConsumerWidget {
                   options: [for (final u in purchaseUnits) DropdownOption(u, u)],
                   onChanged: (v) => _set(recompute: true, () {
                     line.unit = v;
-                    line.recomputeStock();
+                    line.recompute();
+                  }),
+                ),
+                AppTextField(
+                  fieldKey: ValueKey('recv-free-$index'),
+                  label: 'Free',
+                  hint: '0',
+                  value: line.free,
+                  error: errors['$k-free'],
+                  keyboardType: TextInputType.number,
+                  inputFormatters: digits,
+                  onChanged: (v) => _set(() {
+                    line.free = v;
+                    line.recompute();
                   }),
                 ),
                 if (line.needsPacksPerBox)
@@ -1185,9 +1250,45 @@ class _ReceiveLineCard extends ConsumerWidget {
                     inputFormatters: digits,
                     onChanged: (v) => _set(() {
                       line.packsPerBox = v;
-                      line.recomputeStock();
+                      line.recompute();
                     }),
                   ),
+                AppTextField(
+                  fieldKey: ValueKey('recv-rate-$index'),
+                  label: 'Rate per ${line.unit} (₹)',
+                  hint: 'PTR, before GST',
+                  value: line.rate,
+                  error: errors['$k-rate'],
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
+                  onChanged: (v) => _set(() {
+                    line.rate = v;
+                    line.recompute();
+                  }),
+                ),
+                AppTextField(
+                  fieldKey: ValueKey('recv-disc-$index'),
+                  label: 'Disc %',
+                  hint: '0',
+                  value: line.disc,
+                  error: errors['$k-disc'],
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
+                  onChanged: (v) => _set(() {
+                    line.disc = v;
+                    line.recompute();
+                  }),
+                ),
+                AppDropdown<String>(
+                  label: 'GST %',
+                  labelAbove: true,
+                  value: line.gst.isEmpty ? '${p.gstRate}' : line.gst,
+                  options: [for (final g in const [0, 5, 12, 18, 28]) DropdownOption('$g', '$g%')],
+                  onChanged: (v) => _set(() {
+                    line.gst = v;
+                    line.recompute();
+                  }),
+                ),
                 AppTextField(
                   fieldKey: ValueKey('recv-batch-$index'),
                   label: 'Batch no.',
@@ -1205,6 +1306,18 @@ class _ReceiveLineCard extends ConsumerWidget {
                   error: errors['$k-expiry'],
                   keyboardType: TextInputType.datetime,
                   onChanged: (v) => _set(() => line.expiry = v),
+                ),
+                AppTextField(
+                  fieldKey: ValueKey('recv-mrp-$index'),
+                  label: 'MRP (₹, on the pack)',
+                  hint: existing != null ? formatInr(Paise(existing.mrpPaise)) : '0.00',
+                  value: existing != null ? Paise(existing.mrpPaise).toInputString() : line.mrp,
+                  // One batch number, one printed MRP.
+                  enabled: existing == null,
+                  error: errors['$k-mrp'],
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
+                  onChanged: (v) => _set(() => line.mrp = v),
                 ),
                 AppTextField(
                   fieldKey: ValueKey('recv-units-$index'),
@@ -1227,7 +1340,10 @@ class _ReceiveLineCard extends ConsumerWidget {
                   error: errors['$k-amount'],
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
                   inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
-                  onChanged: (v) => _set(() => line.amount = v),
+                  onChanged: (v) => _set(() {
+                    line.amount = v;
+                    line.amountEdited = true;
+                  }),
                 ),
               ],
             ),
@@ -1237,6 +1353,11 @@ class _ReceiveLineCard extends ConsumerWidget {
               runSpacing: 4,
               children: [
                 if (boxMaths != null) Text(boxMaths, key: ValueKey('recv-boxmaths-$index'), style: AppType.smallStrong),
+                if (perPack != null)
+                  Text('${formatInr(perPack)} per ${nouns.pack}${free > 0 ? ' (free goods included)' : ''}',
+                      key: ValueKey('recv-cost-$index'), style: AppType.caption),
+                if (amountNote != null) Text(amountNote, style: AppType.caption.copyWith(color: StatusTone.warning.colors.fg)),
+                if (mrpNote != null) Text(mrpNote, key: ValueKey('recv-mrpnote-$index'), style: AppType.caption.copyWith(color: StatusTone.warning.colors.fg)),
                 if (batchHint != null) Text(batchHint, style: AppType.caption),
                 if (check == ExpiryCheck.near)
                   Text(

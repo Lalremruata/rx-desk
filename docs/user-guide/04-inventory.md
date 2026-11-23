@@ -41,11 +41,14 @@ stock** (bar and number) · **MRP** · **Rack** · **Status** · **Receive** but
 
 For medicines sold loose, stock reads like **12 strips + 4 tabs**.
 
+**MRP** is the MRP of the batch that billing sells first. **"2 MRPs"** under it means the batches
+in stock carry different printed MRPs. Open the row to see each batch's MRP.
+
 ### Batches and details
 
 Click a row (or **Show batches**) to open it. You'll see:
 
-- **The batch table:** **Batch**, **Expiry**, **Qty**, **MRP** and a **Note** for each batch:
+- **The batch table:** **Batch**, **Expiry**, **Qty**, **MRP** (as printed on that batch) and a **Note** for each batch:
   - **Sell first (FEFO)**: the batch billing will pick first
   - **Near expiry**: inside your warning window
   - **Expired · return to supplier**: can't be sold. Send it back with
@@ -78,7 +81,8 @@ Click a row (or **Show batches**) to open it. You'll see:
      is typed in strips.
    - **Reorder level**: when stock falls to this many packs, the medicine shows as low. It starts
      at the default from Settings.
-   - **MRP (₹, incl. GST)**: the MRP printed on the pack, per strip / pack. Required.
+   - **MRP (₹, incl. GST)**: the MRP printed on the pack, per strip / pack. Required. The opening
+     batch gets this MRP.
    - **GST rate**: **0%**, **5%**, **12%** or **18%**.
    - **HSN code** (e.g. 3004) and **Rack / shelf**.
    - **Strips per box** (**Packs per box** for syrups and other non-tablets): how many strips
@@ -111,9 +115,17 @@ Use this for quick additions. To record a stockist's invoice, its amount and wha
 2. Enter **Batch no.**:
    - **An existing batch number** adds to that batch (*"Adding to existing batch …"*).
    - **A new batch number** creates a new batch. Enter its **Expiry** (MM/YYYY).
-3. Enter **Quantity received**, in strips for loose-sold medicines. The **+10**, **+25**,
+3. **MRP (₹, on the pack)**: for a new batch, the MRP printed on it. It starts at the medicine's
+   current MRP; change it if the new stock carries a different MRP. An existing batch keeps its own
+   MRP (the field is locked).
+4. Enter **Quantity received**, in strips for loose-sold medicines. The **+10**, **+25**,
    **+50** and **+100** buttons fill in that quantity.
-4. Press **Add to stock**.
+5. Press **Add to stock**.
+
+**Why MRP is per batch.** When a medicine's price is revised, the new stock arrives with a new
+MRP while older packs still carry the old one. RxDesk keeps the MRP on each batch, sells each
+batch at its own MRP, and moves the medicine's MRP to the newest batch's. One batch number has
+one MRP: stock at a different MRP needs its own batch number.
 
 Check the expiry before you receive a batch here. Expired stock can never be sold, so it has no
 place in stock. (Purchases › Receive invoice refuses an expiry that has already passed.)
@@ -131,6 +143,9 @@ GST rate, HSN, rack and strips per box. Press **Save changes** when done.
 - **New MRP, GST rate or HSN** applies to **new bills only**. Bills already saved keep the price
   and tax they were sold at, and so do the reports. The form reminds you: *"New MRP / GST / HSN
   applies to new bills only — bills already saved keep what they were sold at."*
+- The MRP field here is the **MRP for new batches**. When you change it, a switch appears:
+  **Also change the N batches at ₹old to ₹new**. Leave it on to fix a wrong MRP. Turn it off when
+  only new stock has the new MRP, so the packs on the shelf keep their printed MRP.
 - If a bill with this medicine is open at the counter while you change its price, the counter
   is told to check the total before saving (*"… — bill updated, check the total and save
   again"*).
@@ -142,6 +157,9 @@ GST rate, HSN, rack and strips per box. Press **Save changes** when done.
 
 Press the pencil button on a batch row (*"Edit batch … — number, expiry, counted stock"*).
 
+- **MRP (₹, on the pack)**: fix a wrongly typed MRP for this batch. The change is kept in the
+  batch's history (*"MRP ₹30.90 → ₹30.60"*). Stock that arrives at a new MRP goes in as a new batch
+  instead.
 - **Batch no.** and **Expiry**: fix a typing mistake. An **expired** batch's expiry is locked
   (*"Expired — locked; expired stock can't be sold"*), so expired stock can never be made
   sellable again.

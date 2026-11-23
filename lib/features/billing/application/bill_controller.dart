@@ -151,7 +151,7 @@ class BillController extends _$BillController {
     final now = _repo.now;
     final inBill = {for (final l in state.lines.where((l) => l.productId == p.id)) l.batchId: l.qty};
     final pick = pickBatches(
-      [for (final b in batches) BatchOption(batchId: b.id, batchNo: b.batchNo, expiry: b.expiry, qty: b.qty)],
+      [for (final b in batches) BatchOption(batchId: b.id, batchNo: b.batchNo, expiry: b.expiry, qty: b.qty, mrp: Paise(b.mrpPaise))],
       now,
       inBill: inBill,
     );
@@ -200,7 +200,8 @@ class BillController extends _$BillController {
           schedule: p.schedule,
           batchNo: b.batchNo,
           expiry: b.expiry,
-          mrp: p.mrp,
+          // Each batch sells at its own printed MRP (SPEC §4.5).
+          mrp: b.mrp,
           gstRate: p.gstRate,
           qty: loose ? 1 : size,
           maxQty: b.qty + existing,
@@ -419,7 +420,7 @@ class BillController extends _$BillController {
         saving: false,
         lines: [
           for (final l in state.lines)
-            if (e.changes[l.productId] case final c?) l.copyWith(mrp: c.mrp, gstRate: c.gstRate) else l,
+            if (e.changes[l.batchId] case final c?) l.copyWith(mrp: c.mrp, gstRate: c.gstRate) else l,
         ],
       );
       _toast(e.message, warn: true);
