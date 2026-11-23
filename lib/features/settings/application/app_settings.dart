@@ -51,7 +51,8 @@ enum Permission {
   acceptReturns('Accept returns / issue credit notes'),
   sellOnCredit('Sell on credit (udhaar)'),
   collectPayments('Collect customer payments'),
-  manageCustomerCredit('Set credit limits, opening dues, void payments');
+  manageCustomerCredit('Set credit limits, opening dues, void payments'),
+  cashClose('Record paid-outs and close the day');
 
   const Permission(this.label);
   final String label;
@@ -71,8 +72,9 @@ const Map<String, List<String>> defaultRolePermissions = {
     'acceptReturns',
     'sellOnCredit',
     'collectPayments',
+    'cashClose',
   ],
-  'Cashier': ['collectPayments'],
+  'Cashier': ['collectPayments', 'cashClose'],
 };
 
 /// Every setting (SPEC §7), stored key-by-key as JSON in the `settings`

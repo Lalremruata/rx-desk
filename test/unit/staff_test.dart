@@ -138,7 +138,7 @@ void main() {
     test('Pharmacist defaults: Rx, discount, cancel, stock, reports, returns yes; backups and settings no', () async {
       final c = await make(pharmacist);
       bool can(Permission p) => c.read(canProvider(p));
-      expect([for (final p in Permission.values) can(p)], [true, true, true, true, true, false, false, false, true, true, true, false]);
+      expect([for (final p in Permission.values) can(p)], [true, true, true, true, true, false, false, false, true, true, true, false, true]);
       expect(
         () => c.read(guardedActionsProvider).recordSupplierPayment(supplierId: 1, date: '2026-11-09', payment: const PaymentInput(amount: Paise(100), mode: 'Cash')),
         throwsA(isA<PermissionDenied>()),

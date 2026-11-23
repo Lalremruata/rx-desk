@@ -1,4 +1,4 @@
-# 9. Backup and restore
+# 10. Backup and restore
 
 [← Contents](README.md)
 

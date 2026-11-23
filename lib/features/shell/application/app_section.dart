@@ -48,6 +48,13 @@ enum AppSection {
     Icons.people_alt_rounded,
     'Who owes what — credit bills, payments and statements',
   ),
+  cash(
+    Routes.cash,
+    'Day close',
+    Icons.point_of_sale_outlined,
+    Icons.point_of_sale_rounded,
+    'Cash in the drawer — paid-outs and closing the day',
+  ),
   register(
     Routes.register,
     'Sales register',
@@ -85,7 +92,7 @@ enum AppSection {
   final IconData selectedIcon;
   final String subtitle;
 
-  /// The nine sidebar items (gallery excluded).
+  /// The sidebar items (gallery excluded).
   static const List<AppSection> nav = [
     dashboard,
     billing,
@@ -93,6 +100,7 @@ enum AppSection {
     purchases,
     invoices,
     customers,
+    cash,
     register,
     backup,
     settings,
@@ -100,7 +108,7 @@ enum AppSection {
 
   /// Bottom-bar items on compact widths; the rest live under "More".
   static const List<AppSection> compactPrimary = [dashboard, billing, inventory, invoices];
-  static const List<AppSection> compactMore = [purchases, customers, register, backup, settings];
+  static const List<AppSection> compactMore = [purchases, customers, cash, register, backup, settings];
 
   /// Section owning [path] ("/settings/invoice" → settings). Unknown → billing.
   static AppSection fromPath(String path) {

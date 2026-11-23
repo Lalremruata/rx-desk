@@ -214,5 +214,5 @@ stock is at or below that level. It then shows in **Low stock**, on the Dashboar
 **Purchases › New order › Add low-stock items**.
 
 To set reorder levels from real sales, use the **Consumption register** button on this screen.
-It opens the [Inventory Management Register](08-reports.md#inventory-management-register),
+It opens the [Inventory Management Register](09-reports.md#inventory-management-register),
 which can apply suggested reorder levels for many medicines at once.

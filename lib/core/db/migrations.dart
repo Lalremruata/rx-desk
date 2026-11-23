@@ -7,7 +7,7 @@ import 'fts.dart';
 
 /// Current schema version. Every bump needs a step in [_steps] and a test in
 /// test/dao/migration_test.dart (CLAUDE.md rule 10).
-const int latestSchemaVersion = 13;
+const int latestSchemaVersion = 14;
 
 /// `_steps[v]` migrates schema v → v + 1.
 final Map<int, Future<void> Function(AppDatabase db, Migrator m)> _steps = {
@@ -128,6 +128,19 @@ final Map<int, Future<void> Function(AppDatabase db, Migrator m)> _steps = {
   // v12 → v13: held (parked) bills at the counter (SPEC §5.2).
   12: (db, m) async {
     if (!await _hasTable(db, 'held_bills')) await m.createTable(db.heldBills);
+  },
+  // v13 → v14: day-end cash closing (SPEC §4.14) — paid-outs, closings, and
+  // the new cashClose permission for Pharmacists and Cashiers.
+  13: (db, m) async {
+    if (!await _hasTable(db, 'cash_paid_out')) await m.createTable(db.cashPaidOuts);
+    if (!await _hasTable(db, 'cash_closings')) await m.createTable(db.cashClosings);
+    for (final s in cashIndexStatements) {
+      await db.customStatement(s);
+    }
+    await grantRolePermissions(db, const {
+      'Pharmacist': ['cashClose'],
+      'Cashier': ['cashClose'],
+    });
   },
 };
 

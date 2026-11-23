@@ -292,8 +292,9 @@ void main() {
     final idx = await migrated.customSelect("SELECT name FROM sqlite_master WHERE type = 'index' AND name LIKE 'idx_cledger%'").get();
     expect(idx, hasLength(3));
     final perms = (await migrated.customSelect("SELECT value FROM settings WHERE key = 'rolePermissions'").getSingle()).read<String>('value');
-    expect(perms, contains('"Pharmacist":["sellRx","sellOnCredit","collectPayments"]'));
-    expect(perms, contains('"Cashier":["collectPayments"]'));
+    // Later steps grant later permissions too (v14: cashClose).
+    expect(perms, contains('"Pharmacist":["sellRx","sellOnCredit","collectPayments","cashClose"]'));
+    expect(perms, contains('"Cashier":["collectPayments","cashClose"]'));
 
     // The existing customer can buy on credit straight away.
     final s = await migrated.salesDao.saveBill(
@@ -462,6 +463,31 @@ void main() {
     expect((h.label, HeldBillData.decode(h.payload).lines.single.qty), ('Mawii', 2));
     expect((await reopened.heldBillsDao.take(h.id))?.id, h.id);
     expect(await reopened.heldBillsDao.count(), 0);
+  });
+
+  test('migration v13 → v14: cash tables and indexes; Pharmacist and Cashier may close the day', () async {
+    final v13Path = '${dir.path}/v13.sqlite';
+    final db = fileDb(v13Path);
+    await addMed(db, qty: 5);
+    await db.customStatement('DROP TABLE cash_paid_out');
+    await db.customStatement('DROP TABLE cash_closings');
+    await db.customStatement(
+      "INSERT INTO settings(key, value) VALUES ('rolePermissions', ?)",
+      ['{"Pharmacist":["sellRx"],"Cashier":["collectPayments"]}'],
+    );
+    await db.customStatement('PRAGMA user_version = 13');
+    await db.close();
+
+    final migrated = fileDb(v13Path);
+    addTearDown(migrated.close);
+    expect((await migrated.customSelect('PRAGMA user_version').getSingle()).read<int>('user_version'), latestSchemaVersion);
+    final idx = await migrated.customSelect("SELECT name FROM sqlite_master WHERE type = 'index' AND name LIKE 'idx_cash%'").get();
+    expect(idx, hasLength(4));
+    final perms = (await migrated.customSelect("SELECT value FROM settings WHERE key = 'rolePermissions'").getSingle()).read<String>('value');
+    expect(perms, '{"Pharmacist":["sellRx","cashClose"],"Cashier":["collectPayments","cashClose"]}');
+    await migrated.cashDao.addPaidOut(date: '2026-11-09', amount: const Paise(1500), note: 'Tea', at: t0);
+    final c = await migrated.cashDao.closeDay(date: '2026-11-09', opening: const Paise(10000), counted: const Paise(8500), at: t0);
+    expect(c.differencePaise, 0);
   });
 }
 

@@ -1,4 +1,4 @@
-# 11. Staff and permissions
+# 12. Staff and permissions
 
 [← Contents](README.md)
 
@@ -57,6 +57,7 @@ Pharmacist or Cashier, then press **Save changes**. These are the starting setti
 | **Sell on credit (udhaar)** | ✓ | ✓ | — | The **Credit** payment mode |
 | **Collect customer payments** | ✓ | ✓ | ✓ | Receiving payments, adding or editing customers |
 | **Set credit limits, opening dues, void payments** | ✓ | — | — | Customer credit control |
+| **Record paid-outs and close the day** | ✓ | ✓ | ✓ | [Day close](08-day-close.md). Voiding a paid-out and closing a past day again are Owner only. |
 
 Some things are **Owner only, whatever the table says**:
 

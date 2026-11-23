@@ -1,4 +1,4 @@
-# 10. Settings
+# 11. Settings
 
 [← Contents](README.md)
 
@@ -129,11 +129,11 @@ shows how many medicines currently fall under each setting.
 | **Default reorder level for new medicines** | 20 | In packs |
 | **Suggest earliest expiry first (FEFO)** | On | The batch that expires first is picked at billing |
 | **Show low-stock count on the menu** | On | The amber number next to Inventory |
-| **Stockist lead time (days)** | Average 1, Maximum 2 | How long a stockist takes to supply. Used by the [Inventory Management Register](08-reports.md#inventory-management-register). 1–60 days; the maximum can't be less than the average. |
+| **Stockist lead time (days)** | Average 1, Maximum 2 | How long a stockist takes to supply. Used by the [Inventory Management Register](09-reports.md#inventory-management-register). 1–60 days; the maximum can't be less than the average. |
 
 ## Staff & roles
 
-*Accounts and permissions.* See [Staff and permissions](11-staff-and-permissions.md).
+*Accounts and permissions.* See [Staff and permissions](12-staff-and-permissions.md).
 
 ## Appearance
 

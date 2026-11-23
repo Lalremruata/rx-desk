@@ -16,7 +16,7 @@ RxDesk comes as one setup file, **RxDesk-Setup-*version*.exe**.
 - **Updating:** run the newer setup file over the old one. Your medicines, bills and settings
   stay as they are. If the update changes how data is stored, RxDesk upgrades the data the first
   time it opens. (Take a backup before updating, just in case. See
-  [Backup and restore](09-backup-and-restore.md).)
+  [Backup and restore](10-backup-and-restore.md).)
 - **Uninstalling** removes the program only. Your pharmacy data and backups are kept in your
   Windows user folder and are never deleted by the uninstaller.
 
@@ -36,7 +36,7 @@ The app has no "forgot PIN" option.
 > The PIN is stored only in scrambled (hashed) form, never as the plain digits.
 
 Pharmacists and Cashiers are added later, in **Settings › Staff & roles** (see
-[Staff and permissions](11-staff-and-permissions.md)).
+[Staff and permissions](12-staff-and-permissions.md)).
 
 ## Signing in and locking the counter
 
@@ -53,7 +53,7 @@ When RxDesk is locked, it shows *"Locked — choose your name and enter your PIN
 - **Wrong PIN.** After too many wrong tries, RxDesk shows *"Too many wrong PINs — try again in
   30 seconds"*.
 - **Forgotten PIN.** The Owner can set a new PIN for any staff member (see
-  [Staff and permissions](11-staff-and-permissions.md#change-a-role-reset-a-pin-disable-an-account)).
+  [Staff and permissions](12-staff-and-permissions.md#change-a-role-reset-a-pin-disable-an-account)).
 
 ## The screen
 
@@ -69,6 +69,7 @@ When RxDesk is locked, it shows *"Locked — choose your name and enter your PIN
 | **Purchases** | Order book: what you ordered and what came in. Also stockist dues. |
 | **Invoices** | One row per bill: find it, reprint it, or take a return |
 | **Customers** | Who owes what: credit bills, payments and statements |
+| **Day close** | The cash that should be in the drawer: paid-outs, counting and closing the day |
 | **Sales register** | One row per item sold: filter, group, total and export |
 | **Backup & restore** | Your data lives on this device, so keep a copy safe |
 | **Settings** | Store details, invoice layout, billing rules and staff |
@@ -83,7 +84,7 @@ Small numbers next to some menu items:
 
 The card at the bottom of the menu says **Working offline**. It shows how many medicines are
 stored on this device and when the last backup was made, and its **Back up now** button opens
-[Backup and restore](09-backup-and-restore.md).
+[Backup and restore](10-backup-and-restore.md).
 
 ### Header (top of every screen)
 
@@ -101,7 +102,7 @@ RxDesk works by touch, mouse or keyboard. Every icon-only button shows a tooltip
 
 ## First-day setup checklist (Owner)
 
-Before the first real bill, work through these. Each one is explained in [Settings](10-settings.md).
+Before the first real bill, work through these. Each one is explained in [Settings](11-settings.md).
 
 1. **Settings › Store profile.** Fill in the pharmacy name, address, phone, **GSTIN**, the drug
    licence numbers (**Form 20B / 21B**) and the registered pharmacist's name and registration number.

@@ -15,7 +15,7 @@ Cashiers).
 - `Keys` you press are written like `F10`.
 - **Who can do this** says which roles can use a feature with the standard settings. The Owner can
   change what Pharmacists and Cashiers are allowed to do (see
-  [Staff and permissions](11-staff-and-permissions.md)).
+  [Staff and permissions](12-staff-and-permissions.md)).
 
 | Role | In short |
 |---|---|
@@ -32,11 +32,12 @@ Cashiers).
 5. [Purchases](05-purchases.md): order book, receiving stockist invoices (including boxes → strips), stockist dues and payments, the stockist directory
 6. [Invoices and returns](06-invoices-and-returns.md): finding and reprinting bills, cancelling, sales returns and credit notes
 7. [Customers and credit](07-customers-and-credit.md): udhaar, customer dues, payments and statements
-8. [Reports](08-reports.md): the Sales register, GST and Schedule H registers, the Inventory Management Register
-9. [Backup and restore](09-backup-and-restore.md): keeping your data safe
-10. [Settings](10-settings.md): every setting explained
-11. [Staff and permissions](11-staff-and-permissions.md): staff accounts, PINs, roles
-12. [How RxDesk works, FAQ and glossary](12-how-it-works-and-faq.md): GST maths, invoice numbers, common questions
+8. [Day close](08-day-close.md): the cash that should be in the drawer, paid-outs, counting and closing the day
+9. [Reports](09-reports.md): the Sales register, GST and Schedule H registers, the Inventory Management Register
+10. [Backup and restore](10-backup-and-restore.md): keeping your data safe
+11. [Settings](11-settings.md): every setting explained
+12. [Staff and permissions](12-staff-and-permissions.md): staff accounts, PINs, roles
+13. [How RxDesk works, FAQ and glossary](13-how-it-works-and-faq.md): GST maths, invoice numbers, common questions
 
 ## A normal day at the counter
 
@@ -50,7 +51,8 @@ Cashiers).
 5. **Need to order?** Open **Purchases › New order** and choose **Add low-stock items**.
 6. **When a customer pays their dues**, go to [Customers](07-customers-and-credit.md) and use
    **Receive**.
-7. **At closing**, check the day's total on the Dashboard or in the
-   [Sales register](08-reports.md). Lock the counter. RxDesk makes the automatic backup when it
+7. **At closing**, open [Day close](08-day-close.md): count the cash drawer, record what was
+   paid out, and close the day. Check the day's total on the Dashboard or in the
+   [Sales register](09-reports.md). Lock the counter. RxDesk makes the automatic backup when it
    closes. Every so often, copy the backup folder to a pen drive or another computer (see
-   [Backup and restore](09-backup-and-restore.md)).
+   [Backup and restore](10-backup-and-restore.md)).

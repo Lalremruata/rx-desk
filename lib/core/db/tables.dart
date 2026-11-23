@@ -527,3 +527,47 @@ class HeldBills extends Table {
   IntColumn get staffId => integer().nullable().references(Staff, #id)();
   IntColumn get heldAt => integer()();
 }
+
+/// v14: cash paid out of the drawer for shop expenses (SPEC §4.14). Never
+/// deleted — a mistake is voided with a reason.
+class CashPaidOuts extends Table {
+  @override
+  String get tableName => 'cash_paid_out';
+  IntColumn get id => integer().autoIncrement()();
+  TextColumn get entryDate => text()();
+  IntColumn get amountPaise => integer()();
+
+  /// What it was for ("Tea", "Auto fare").
+  TextColumn get note => text()();
+
+  /// 'active' | 'void'
+  TextColumn get status => text().withDefault(const Constant('active'))();
+  TextColumn get voidReason => text().nullable()();
+  IntColumn get staffId => integer().nullable().references(Staff, #id)();
+  IntColumn get createdAt => integer()();
+}
+
+/// v14: a day's cash closing (SPEC §4.14). Closing again adds a row; the
+/// latest row for a date is the closing, earlier ones are history. Figures
+/// are snapshots of what RxDesk knew at closing time.
+class CashClosings extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  TextColumn get closeDate => text()();
+  IntColumn get openingPaise => integer()();
+  IntColumn get cashSalesPaise => integer()();
+  IntColumn get cashRefundsPaise => integer()();
+  IntColumn get duesCollectedPaise => integer()();
+  IntColumn get stockistsPaidPaise => integer()();
+  IntColumn get paidOutsPaise => integer()();
+  IntColumn get expectedPaise => integer()();
+  IntColumn get countedPaise => integer()();
+
+  /// counted − expected (negative = short).
+  IntColumn get differencePaise => integer()();
+
+  /// Taken out of the drawer after counting (to the bank / the Owner).
+  IntColumn get handedOverPaise => integer().withDefault(const Constant(0))();
+  TextColumn get note => text().withDefault(const Constant(''))();
+  IntColumn get staffId => integer().nullable().references(Staff, #id)();
+  IntColumn get closedAt => integer()();
+}

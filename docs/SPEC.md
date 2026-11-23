@@ -33,6 +33,11 @@ A pharmacist or cashier at the counter must be able to:
     stock (the store's "Inventory Management Register"), and apply the reorder levels (§4.12).
 13. Correct the catalogue and stock: edit a medicine's details, fix a batch number or expiry, set
     a batch to the counted quantity with a reason, and hide medicines no longer sold (§4.13, §5.3).
+14. Sell each batch at the MRP printed on it, and record a stockist line's rate, free goods,
+    discount and GST (§4.5, §4.7).
+15. Park a bill and serve the next customer, then recall it (§5.2).
+16. Close the day: know the cash that should be in the drawer, record paid-outs, count it and
+    keep the difference (§4.14, §5.11).
 
 Out of scope for v1: online sync, e-invoicing / IRN, sending orders to suppliers
 electronically, purchase GST input-credit reports, interest on late payment,
@@ -50,9 +55,11 @@ Sidebar order (matches prototype):
 | 3 | Inventory | `/inventory` | Badge: low/out-of-stock count (hideable in settings) |
 | 4 | Purchases | `/purchases` | Badge: open order lines (pending + part supplied) |
 | 5 | Invoices | `/invoices` | |
-| 6 | Sales register | `/register` | |
-| 7 | Backup & restore | `/backup` | |
-| 8 | Settings | `/settings/:tab` | Amber dot when there are unsaved settings |
+| 6 | Customers | `/customers` | |
+| 7 | Day close | `/cash` | Needs `cashClose` (§4.14) |
+| 8 | Sales register | `/register` | |
+| 9 | Backup & restore | `/backup` | |
+| 10 | Settings | `/settings/:tab` | Amber dot when there are unsaved settings |
 
 Sidebar footer card: pulsing amber dot "Working offline", text "N medicines stored on this
 device. Last backup: …", button "Back up now" → `/backup`.
@@ -189,6 +196,14 @@ product_sources    id PK, supplier_id FK, product_id FK NULL (NULL = name not in
 
 -- v9: editable inventory (§4.13)
 stock_movements    + note TEXT DEFAULT '' ("Damaged: 2 strips crushed")
+
+-- v14: day-end cash closing (§4.14)
+cash_paid_out      id PK, entry_date TEXT, amount_paise INT, note TEXT ("Tea"),
+                   status ('active'|'void'), void_reason NULL, staff_id NULL, created_at
+cash_closings      id PK, close_date TEXT, opening_paise, cash_sales_paise, cash_refunds_paise,
+                   dues_collected_paise, stockists_paid_paise, paid_outs_paise, expected_paise,
+                   counted_paise, difference_paise (counted − expected), handed_over_paise,
+                   note, staff_id NULL, closed_at   (latest row per date = the closing)
 
 -- v13: held (parked) bills (§5.2) — not invoices; deleted on recall / discard
 held_bills         id PK, label, payload TEXT (JSON: lines with product, batch, qty, loose,
@@ -553,6 +568,24 @@ All of these need `changeStock` and run in one transaction each.
   expiry counts and stock value; nothing is deleted. Inventory's **Hidden** view lists hidden
   medicines with **Unhide**. Billing a hidden medicine is refused (`inactiveProduct`).
 
+### 4.14 Day-end cash closing
+
+- **Expected cash** for a day = opening + cash bills (`doc_type='invoice'`, payment Cash, not
+  cancelled, by `sale_date`) − credit notes refunded in Cash + customer payments in Cash (active;
+  includes "paid now" on credit bills) − stockist payments in Cash (active; includes paid on
+  delivery) − paid-outs (active). Card, UPI and Credit don't touch the drawer.
+- **Opening** = the latest earlier closing's counted cash − handed over. With no earlier
+  closing the user types it.
+- **Paid-outs**: cash taken from the drawer for shop expenses (amount > 0 + what for). Never
+  deleted; the Owner can void one with a reason (it stays listed, struck through).
+- **Closing** snapshots every figure, the opening used, the cash counted (typed, or counted by
+  notes ₹500/200/100/50/20/10 + coins), the difference (counted − expected; negative = short),
+  what was handed over (≤ counted) and a note. Closing again adds a row; the latest row for a
+  date is the closing, earlier ones stay as history. Re-closing a past day is Owner only.
+- If the live figures differ from the closing's snapshot (a late sale, a cancelled bill, a voided
+  payment), the day shows "Changed since closing — close again".
+- Permission `cashClose` (Pharmacist ✓, Cashier ✓) covers paid-outs and closing.
+
 ## 5. Screens
 
 Copy, layout and states follow the prototype. Highlights:
@@ -776,6 +809,18 @@ sample.
   warning.
 - Dashboard: a "Customer dues" card (total, 90+ days, top 4 → statement).
 
+### 5.11 Day close (`/cash`)
+
+Date bar (‹ date ›, Today, "Not closed yet" / "Closed 21:04", "Changed since closing" badge).
+**Cash in the drawer** card: Opening (with where it came from), + Cash sales, − Cash refunds,
++ Dues collected in cash, − Paid to stockists in cash, − Paid out, = **Expected in drawer**.
+**Count and close** card: Opening cash (only when there is no earlier closing), "Count by
+notes" toggle (note counts + coins) or Cash counted, live difference badge (Exact / ₹… short /
+₹… over), Handed over (helper "Opening tomorrow ₹…"), Note, **Close the day** / **Close again**,
+**Print summary** (A4: figures, counted, difference, paid-outs, signature lines). **Paid out**
+card: the day's entries (time, what for, amount; void ones struck through) and **Record paid
+out**; the Owner sees a void button.
+
 ## 6. Invoice layout and printing
 
 Built once as a **pure function** `InvoiceDocument build(InvoiceData, Settings, PaperSize)`
@@ -851,6 +896,8 @@ credit notes, opening balances, voids and stockist terms; returns to stockist ne
 "change stock". Accept returns / issue credit notes (✓/✗); the return window can be overridden
 by the Owner only. Sell on credit (✓/✗), collect customer payments (✓/✓), set credit limits /
 opening dues / void payments (✗/✗); a bill over a credit limit needs the Owner (PIN).
+Record paid-outs and close the day (`cashClose`, ✓/✓); voiding a paid-out and re-closing a past
+day are Owner only.
 "Reset to defaults" restores §7 defaults but never touches data or staff.
 
 ## 8. Design system

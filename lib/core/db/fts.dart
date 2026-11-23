@@ -77,6 +77,15 @@ const List<String> indexStatements = [
   ...returnsIndexStatements,
   ...creditIndexStatements,
   ...sourcesIndexStatements,
+  ...cashIndexStatements,
+];
+
+/// v14: day-end cash closing (SPEC §4.14) — the day's cash, by date.
+const List<String> cashIndexStatements = [
+  "CREATE INDEX IF NOT EXISTS idx_cash_cledger_payment ON customer_ledger(entry_date) WHERE kind = 'payment'",
+  "CREATE INDEX IF NOT EXISTS idx_cash_sledger_payment ON supplier_ledger(entry_date) WHERE kind = 'payment'",
+  'CREATE INDEX IF NOT EXISTS idx_cash_paidout_date ON cash_paid_out(entry_date)',
+  'CREATE INDEX IF NOT EXISTS idx_cash_closings_date ON cash_closings(close_date, id)',
 ];
 
 /// Stockist directory indexes (schema v8, SPEC §3.3).

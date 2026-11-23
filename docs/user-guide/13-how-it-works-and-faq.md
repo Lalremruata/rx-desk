@@ -1,4 +1,4 @@
-# 12. How RxDesk works, FAQ and glossary
+# 13. How RxDesk works, FAQ and glossary
 
 [← Contents](README.md)
 
@@ -127,13 +127,19 @@ On the receipt line, choose **Box** and type **Strips per box**. RxDesk multipli
 remembers the number for that medicine (see
 [Receiving in boxes](05-purchases.md#receiving-in-boxes-strips-per-box)).
 
+**The cash in the drawer doesn't match.**
+Open **Day close**. It lists everything that should have changed the drawer today: cash bills,
+cash refunds, dues collected in cash, cash paid to stockists and paid-outs. Check for a cash
+expense that wasn't recorded as a paid-out, or a bill saved under the wrong payment mode. Write
+what you find in the closing **Note**.
+
 **Somebody forgot their PIN.**
 The Owner sets a new one in **Settings › Staff & roles › Reset PIN**. An Owner's PIN can only be
 reset by another Owner account, so keep the Owner PIN safe.
 
 **We're moving to a new computer.**
 Make a backup on the old one. On the new one, install RxDesk, create an Owner account, then
-**Backup & restore › Choose backup file…**. See [Backup and restore](09-backup-and-restore.md).
+**Backup & restore › Choose backup file…**. See [Backup and restore](10-backup-and-restore.md).
 
 **What do I give the accountant for GST?**
 **Sales register › GST summary by HSN (last month) › Export Excel**. For a full listing, export
@@ -163,6 +169,8 @@ the **Lines** view for the month.
 | **Damdawi lak na** | "Where to get medicines": your stockist directory sheet |
 | **MR** | Medical Representative of a pharmaceutical company |
 | **Strips per box** | How many strips (or packs) come in one stockist box. Used when receiving in boxes. |
+| **Paid-out** | Cash taken from the drawer for a shop expense, recorded in Day close |
+| **Handed over** | Cash taken out of the drawer after counting (to the bank or the Owner) |
 | **Reorder level** | When stock falls to this many packs, the medicine shows as low |
 | **Dead stock** | Stock that hasn't sold for a long time (90 days unless changed) |
 | **Lead time** | How many days a stockist takes to deliver after you order |

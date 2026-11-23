@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
+import '../../../core/cash/cash_rules.dart';
 import '../../../core/db/app_database.dart';
 import '../../../core/db/daos/customers_dao.dart';
 import '../../../core/db/daos/dues_dao.dart';
@@ -12,9 +13,11 @@ import '../../../core/db/models.dart';
 import '../../../core/inventory/stock_adjust.dart';
 import '../../../core/money/paise.dart';
 import '../../../core/sales/return_rules.dart';
+import '../../../core/utils/expiry.dart';
 import '../../backup/application/backup_format.dart';
 import '../../backup/application/backup_service.dart';
 import '../../billing/data/sales_repository.dart';
+import '../../cash/data/cash_repository.dart';
 import '../../customers/data/customers_repository.dart';
 import '../../inventory/data/inventory_repository.dart';
 import '../../purchases/data/purchases_repository.dart';
@@ -242,6 +245,37 @@ class GuardedActions {
           SaveCreditNoteRequest(invoiceId: invoiceId, lines: lines, refundMode: refundMode, reason: reason, staffId: _staffId),
           _ref.read(settingsProvider).returnRules(role: role),
         );
+  }
+
+  // Day-end cash closing (SPEC §4.14).
+
+  Future<int> addPaidOut({required String date, required Paise amount, required String note}) {
+    requirePermission(_ref, Permission.cashClose);
+    return _ref.read(cashRepositoryProvider).addPaidOut(date: date, amount: amount, note: note, staffId: _staffId);
+  }
+
+  /// Owner only: a paid-out entered by mistake.
+  Future<void> voidPaidOut(int id, {required String reason}) {
+    if (_ref.read(sessionProvider)?.role != StaffRole.owner) throw const CashException('Only the Owner can void a paid-out');
+    return _ref.read(cashRepositoryProvider).voidPaidOut(id, reason: reason);
+  }
+
+  /// Closing today needs `cashClose`; closing a past day again is Owner only.
+  Future<CashClosing> closeDay({
+    required String date,
+    required Paise opening,
+    required Paise counted,
+    Paise handedOver = Paise.zero,
+    String note = '',
+    bool alreadyClosed = false,
+  }) {
+    requirePermission(_ref, Permission.cashClose);
+    final repo = _ref.read(cashRepositoryProvider);
+    final today = dateKey(repo.now);
+    if (alreadyClosed && date != today && _ref.read(sessionProvider)?.role != StaffRole.owner) {
+      throw const CashException('Only the Owner can close a past day again');
+    }
+    return repo.closeDay(date: date, opening: opening, counted: counted, handedOver: handedOver, note: note, staffId: _staffId);
   }
 
   Future<PreparedBackup> prepareBackup({String? password, void Function(double)? onProgress}) {

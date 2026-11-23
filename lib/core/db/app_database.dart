@@ -6,6 +6,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
 import 'daos/backup_dao.dart';
+import 'daos/cash_dao.dart';
 import 'daos/catalog_dao.dart';
 import 'daos/customers_dao.dart';
 import 'daos/dues_dao.dart';
@@ -50,8 +51,10 @@ part 'app_database.g.dart';
     CustomerAllocations,
     ProductSources,
     HeldBills,
+    CashPaidOuts,
+    CashClosings,
   ],
-  daos: [CatalogDao, SalesDao, ReportsDao, SettingsDao, StaffDao, BackupDao, PurchasesDao, DuesDao, CustomersDao, SourcesDao, HeldBillsDao],
+  daos: [CatalogDao, SalesDao, ReportsDao, SettingsDao, StaffDao, BackupDao, PurchasesDao, DuesDao, CustomersDao, SourcesDao, HeldBillsDao, CashDao],
 )
 class AppDatabase extends _$AppDatabase {
   AppDatabase(super.e);

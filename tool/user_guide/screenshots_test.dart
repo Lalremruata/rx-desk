@@ -237,6 +237,22 @@ Future<void> _extras(AppDatabase db) async {
   );
 }
 
+// Day close (SPEC §4.14): yesterday closed with ₹2,000 left in the drawer;
+// two paid-outs today.
+Future<void> _cashExtras(AppDatabase db) async {
+  final y = await db.cashDao.figures('2026-11-08');
+  final counted = y.expected(const Paise(200000));
+  await db.cashDao.closeDay(
+    date: '2026-11-08',
+    opening: const Paise(200000),
+    counted: counted,
+    handedOver: Paise(counted.value - 200000),
+    at: DateTime(2026, 11, 8, 21, 5),
+  );
+  await db.cashDao.addPaidOut(date: '2026-11-09', amount: const Paise(6000), note: 'Tea for staff', at: DateTime(2026, 11, 9, 9, 40));
+  await db.cashDao.addPaidOut(date: '2026-11-09', amount: const Paise(12000), note: 'Auto fare — stockist pickup', at: DateTime(2026, 11, 9, 10, 15));
+}
+
 // ---------------------------------------------------------------------------
 
 void main() {
@@ -248,6 +264,7 @@ void main() {
       final db = AppDatabase(NativeDatabase(File(_demo)));
       await seedDemoData(db, now: testNow);
       await _extras(db);
+      await _cashExtras(db);
       await db.close();
     }
   });
@@ -474,7 +491,17 @@ void main() {
     await _shot(tester, '07-statement');
   });
 
-  // 8 · Reports
+  // 8 · Day close
+  testWidgets('08-day-close', (tester) async {
+    final db = await _open(tester, '/cash');
+    final f = (await tester.runAsync(() => db.cashDao.figures('2026-11-09')))!;
+    final counted = f.expected(const Paise(200000)).value - 2000; // ₹20 short
+    await _type(tester, 'cash-counted', Paise(counted).toInputString());
+    await _type(tester, 'cash-handed', Paise(counted - 200000).toInputString());
+    await _shot(tester, '08-day-close');
+  });
+
+  // 9 · Reports
   testWidgets('08-sales-register', (tester) async {
     await _open(tester, '/register');
     await _shot(tester, '08-sales-register');

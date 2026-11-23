@@ -6,6 +6,7 @@ abstract final class Routes {
   static const String purchases = '/purchases';
   static const String invoices = '/invoices';
   static const String customers = '/customers';
+  static const String cash = '/cash';
   static const String register = '/register';
   static const String consumption = '/register/consumption';
   static const String backup = '/backup';

@@ -5,6 +5,7 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../../features/backup/presentation/backup_screen.dart';
 import '../../features/billing/presentation/billing_screen.dart';
+import '../../features/cash/presentation/cash_screen.dart';
 import '../../features/customers/presentation/customers_screen.dart';
 import '../../features/dashboard/presentation/dashboard_screen.dart';
 import '../../features/inventory/presentation/inventory_screen.dart';
@@ -41,6 +42,7 @@ GoRouter createRouter({String initialLocation = Routes.start, bool includeGaller
           _screen(Routes.purchases, const PurchasesScreen()),
           _screen(Routes.invoices, const InvoicesScreen()),
           _screen(Routes.customers, const CustomersScreen()),
+          _screen(Routes.cash, const CashScreen()),
           _screen(Routes.register, const SalesRegisterScreen()),
           _screen(Routes.consumption, const ConsumptionRegisterScreen()),
           _screen(Routes.backup, const BackupScreen()),

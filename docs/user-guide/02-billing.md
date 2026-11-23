@@ -112,7 +112,7 @@ MRP the line shows the strip size, e.g. "per strip of 10".
 - **Schedule H / H1** medicines need the permission *Sell Schedule H / H1 medicines* (on for
   Pharmacists, off for Cashiers). Without it: *"Your role can't sell Schedule H medicines"*.
 - **Schedule X** medicines can't be sold from RxDesk at all.
-- Every H / H1 sale is listed in the **Schedule H / H1 register** (see [Reports](08-reports.md)).
+- Every H / H1 sale is listed in the **Schedule H / H1 register** (see [Reports](09-reports.md)).
 
 ### Discount
 
@@ -139,7 +139,7 @@ for example *"Discount can be at most 15% of the MRP (₹81.75)"*.
 A flat ₹ discount is shared out across the lines according to each line's MRP amount, to the
 paisa, and the shares always add up to exactly what you typed. Each line's GST is then worked
 out on its discounted amount (see
-[How GST is worked out](12-how-it-works-and-faq.md#how-gst-is-worked-out)). Tap a chip again to
+[How GST is worked out](13-how-it-works-and-faq.md#how-gst-is-worked-out)). Tap a chip again to
 go back to a chip discount.
 
 ![Custom discount of ₹25 with the percentage it comes to](images/02-billing-custom-discount.png)
@@ -149,7 +149,7 @@ go back to a chip discount.
 The totals card shows **Items / units**, **Subtotal (MRP)**, **Discount**, **Taxable value**,
 **CGST + SGST (incl.)**, **Round off** (if on), and **Net payable** in large type. MRP already
 includes GST, so the tax is worked out *from* the price. It is never added on top (see
-[How RxDesk works](12-how-it-works-and-faq.md#how-gst-is-worked-out)).
+[How RxDesk works](13-how-it-works-and-faq.md#how-gst-is-worked-out)).
 
 ### Payment mode
 
