@@ -185,6 +185,28 @@ customer owes and how far over the limit this bill goes.
 The printed bill shows *"Payment: Credit"* with what was paid, the balance on this bill and the
 customer's total dues.
 
+## Hold a bill and serve the next customer
+
+A customer has gone to fetch money or a prescription? Park their bill and carry on.
+
+1. Press `F6` (or **Hold bill (F6)** under the search box). The bill is put aside and the
+   counter is cleared: *"Bill held — F6 to recall"*.
+2. Bill the next customer as usual.
+3. When the first customer is back, press `F6` on an empty bill (or **Held bills (N)**) and
+   press **Recall** next to their bill.
+
+- Held bills are listed by the customer's name, or *"Walk-in · first item"*, with the number of
+  items, the total and the time it was held. **Discard** (bin button) removes one you no longer
+  need.
+- Up to 10 bills can be held. They stay held if RxDesk is closed.
+- **Nothing is kept aside.** A held bill has no invoice number and doesn't take stock. When you
+  recall it, RxDesk checks it again against today's stock and prices and tells you what changed,
+  for example *"only 1 … left"* or *"MRP of … is now ₹…"*. Items whose batch has expired, or
+  that your role can't sell, are taken off.
+- Recalling while another bill is open holds the open one in its place.
+
+![Held bills: recall one onto the counter or discard it](images/02-billing-held.png)
+
 ## Save and print
 
 Press **Save & print invoice** or `F10`.

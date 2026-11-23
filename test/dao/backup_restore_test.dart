@@ -11,6 +11,7 @@ import 'package:rx_desk/core/inventory/stock_adjust.dart';
 import 'package:rx_desk/core/money/gst.dart';
 import 'package:rx_desk/core/money/paise.dart';
 import 'package:rx_desk/core/sales/bill_rules.dart';
+import 'package:rx_desk/core/sales/held_bill.dart';
 import 'package:rx_desk/core/sales/return_rules.dart';
 import 'package:rx_desk/features/backup/application/backup_format.dart';
 import 'package:rx_desk/features/backup/application/backup_service.dart';
@@ -435,6 +436,32 @@ void main() {
     final line = await migrated.select(migrated.receiptLines).getSingle();
     expect((line.freeQty, line.ratePaise, line.discBp, line.gstRate, line.mrpPaise), (0, null, 0, null, null));
     expect((await migrated.catalogDao.stockRow(p, now: t0))!.saleMrp, const Paise(4550));
+  });
+
+  test('migration v12 → v13: held_bills table; a held bill survives closing the app', () async {
+    final v12Path = '${dir.path}/v12.sqlite';
+    final db = fileDb(v12Path);
+    await addMed(db, qty: 5);
+    await db.customStatement('DROP TABLE held_bills');
+    await db.customStatement('PRAGMA user_version = 12');
+    await db.close();
+
+    final migrated = fileDb(v12Path);
+    expect((await migrated.customSelect('PRAGMA user_version').getSingle()).read<int>('user_version'), latestSchemaVersion);
+    await migrated.heldBillsDao.hold(
+      label: 'Mawii',
+      data: const HeldBillData(lines: [HeldLine(productId: 1, batchId: 1, qty: 2, mrpPaise: 3090, gstRate: 12)]),
+      itemCount: 1,
+      total: const Paise(6200),
+      at: t0,
+    );
+    await migrated.close();
+    final reopened = fileDb(v12Path);
+    addTearDown(reopened.close);
+    final h = (await reopened.heldBillsDao.watchAll().first).single;
+    expect((h.label, HeldBillData.decode(h.payload).lines.single.qty), ('Mawii', 2));
+    expect((await reopened.heldBillsDao.take(h.id))?.id, h.id);
+    expect(await reopened.heldBillsDao.count(), 0);
   });
 }
 

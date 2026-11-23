@@ -189,6 +189,11 @@ product_sources    id PK, supplier_id FK, product_id FK NULL (NULL = name not in
 
 -- v9: editable inventory (§4.13)
 stock_movements    + note TEXT DEFAULT '' ("Damaged: 2 strips crushed")
+
+-- v13: held (parked) bills (§5.2) — not invoices; deleted on recall / discard
+held_bills         id PK, label, payload TEXT (JSON: lines with product, batch, qty, loose,
+                   MRP + GST as shown; customer, phone, doctor, discount, payment, paid now),
+                   item_count INT, total_paise INT (display only), staff_id NULL, held_at INT
 ```
 
 ### 3.2 Full-text search
@@ -589,7 +594,20 @@ Layout: left 3/5 (search, quick add, bill grid, shortcut hints), right 2/5 "Bill
   net payable 26 px), payment mode (Cash / UPI / Card, F8 cycles), primary
   "Save & print invoice  F10".
 - Shortcuts (window-level `Shortcuts` scoped to the billing route, not global OS hooks):
-  F2 new bill · F3 search · F4 customer · F8 payment mode · F10 save & print · Esc close list.
+  F2 new bill · F3 search · F4 customer · F6 hold / recall · F8 payment mode · F10 save & print ·
+  Esc close list.
+- **Hold / park a bill** (v13): **F6** (or **Hold bill (F6)** under the search box) saves the
+  open bill to `held_bills` and starts a new one — toast "Bill held — F6 to recall". At most 10
+  held bills. Nothing is reserved: no number, no stock taken. **F6 on an empty bill** (or
+  **Held bills (N)**) lists them oldest first — label (customer, else "Walk-in · first item"),
+  items, total, held time — with **Recall** and **Discard** (confirm). Held bills survive a
+  restart and are in backups.
+- **Recall** takes the held bill off the list and rebuilds it from today's data: each line takes
+  its batch's current MRP and the medicine's GST; batches that have expired (rule 5), medicines
+  no longer sold, sold-out batches and Rx items the user's role can't sell are dropped; a line
+  above the batch's stock is cut to what's left. Every change is named in one toast ("Bill for
+  Mawii recalled — MRP of … is now ₹…; only 1 … left"). If a bill is open it is held first
+  (swap). A Credit payment falls back to the default mode for a role that can't sell on credit.
 - After save: toast "INV/26-27/00412 saved · ₹1,234.00 · printing 1 copy", navigate to
   Invoices with that bill selected, reset bill to defaults (payment = default mode).
 

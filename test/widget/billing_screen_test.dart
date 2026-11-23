@@ -188,4 +188,28 @@ void main() {
     await _run(tester);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('F6 holds the bill; Held bills lists it; Recall puts it back', (tester) async {
+    await pumpApp(tester, size: const Size(1440, 900), setUpDb: billingFixture);
+    await _run(tester);
+    await tester.enterText(_search, 'crocin');
+    await _run(tester, 300);
+    await _key(tester, LogicalKeyboardKey.enter);
+    expect(find.text('CRO77'), findsOneWidget);
+    expect(find.byKey(const ValueKey('hold-bill')), findsOneWidget);
+
+    await _key(tester, LogicalKeyboardKey.f6);
+    await _run(tester, 300);
+    expect(find.text('Bill is empty'), findsOneWidget);
+    expect(find.text('Held bills (1)'), findsOneWidget);
+
+    // F6 on an empty bill opens the list.
+    await _key(tester, LogicalKeyboardKey.f6);
+    await _run(tester);
+    expect(find.text('Walk-in · Crocin Advance'), findsOneWidget);
+    await tester.tap(find.text('Recall'));
+    await _run(tester, 600);
+    expect(find.text('CRO77'), findsOneWidget);
+    expect(find.byKey(const ValueKey('held-bills')), findsNothing);
+  });
 }

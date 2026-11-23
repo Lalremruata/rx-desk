@@ -316,6 +316,19 @@ void main() {
     await _shot(tester, '02-billing-credit');
   });
 
+  testWidgets('02-billing-held', (tester) async {
+    await _open(tester, '/billing');
+    await _addToBill(tester, 'cetirizine 10');
+    await _addToBill(tester, 'calcium vitamin');
+    await _type(tester, 'bill-customer', 'Mawii');
+    await _key(tester, LogicalKeyboardKey.f6);
+    await _addToBill(tester, 'paracetamol 650');
+    await _key(tester, LogicalKeyboardKey.f6);
+    await _addToBill(tester, 'ambroxol');
+    await _tap(tester, find.byKey(const ValueKey('held-bills')));
+    await _shot(tester, '02-billing-held');
+  });
+
   // 3 · Dashboard
   testWidgets('03-dashboard', (tester) async {
     await _open(tester, '/dashboard');

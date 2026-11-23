@@ -6,7 +6,9 @@ import '../../../core/db/daos/sales_dao.dart';
 import '../../../core/db/db_provider.dart';
 import '../../../core/db/models.dart';
 import '../../../core/fy/fy.dart';
+import '../../../core/money/paise.dart';
 import '../../../core/sales/bill_rules.dart';
+import '../../../core/sales/held_bill.dart';
 import '../../../core/sales/return_rules.dart';
 
 part 'sales_repository.g.dart';
@@ -19,6 +21,13 @@ class SalesRepository {
   final DateTime Function() _now;
 
   DateTime get now => _now();
+
+  // Held bills (SPEC §5.2 "Hold").
+  Future<int> holdBill({required String label, required HeldBillData data, required int itemCount, required Paise total, int? staffId}) =>
+      _db.heldBillsDao.hold(label: label, data: data, itemCount: itemCount, total: total, at: _now(), staffId: staffId);
+  Stream<List<HeldBill>> watchHeldBills() => _db.heldBillsDao.watchAll();
+  Future<HeldBill?> takeHeldBill(int id) => _db.heldBillsDao.take(id);
+  Future<void> discardHeldBill(int id) => _db.heldBillsDao.discard(id);
 
   Future<SavedBill> saveBill(SaveBillRequest req, BillRules rules) => _db.salesDao.saveBill(req, rules: rules, at: _now());
 

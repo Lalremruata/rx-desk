@@ -9,6 +9,7 @@ import 'daos/backup_dao.dart';
 import 'daos/catalog_dao.dart';
 import 'daos/customers_dao.dart';
 import 'daos/dues_dao.dart';
+import 'daos/held_bills_dao.dart';
 import 'daos/purchases_dao.dart';
 import 'daos/reports_dao.dart';
 import 'daos/sales_dao.dart';
@@ -48,8 +49,9 @@ part 'app_database.g.dart';
     CustomerLedger,
     CustomerAllocations,
     ProductSources,
+    HeldBills,
   ],
-  daos: [CatalogDao, SalesDao, ReportsDao, SettingsDao, StaffDao, BackupDao, PurchasesDao, DuesDao, CustomersDao, SourcesDao],
+  daos: [CatalogDao, SalesDao, ReportsDao, SettingsDao, StaffDao, BackupDao, PurchasesDao, DuesDao, CustomersDao, SourcesDao, HeldBillsDao],
 )
 class AppDatabase extends _$AppDatabase {
   AppDatabase(super.e);

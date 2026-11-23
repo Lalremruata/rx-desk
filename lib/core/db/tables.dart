@@ -509,3 +509,21 @@ class ProductSources extends Table {
   IntColumn get createdAt => integer()();
   IntColumn get updatedAt => integer()();
 }
+
+/// v13: bills parked at the counter (SPEC §5.2 "Hold"). Not invoices — no
+/// number, no stock taken; deleted when recalled or discarded.
+class HeldBills extends Table {
+  IntColumn get id => integer().autoIncrement()();
+
+  /// The customer, else "Walk-in · first item".
+  TextColumn get label => text()();
+
+  /// JSON of HeldBillData (lines, customer, discount, payment).
+  TextColumn get payload => text()();
+  IntColumn get itemCount => integer()();
+
+  /// Net payable when held (for the list only; recomputed on recall).
+  IntColumn get totalPaise => integer()();
+  IntColumn get staffId => integer().nullable().references(Staff, #id)();
+  IntColumn get heldAt => integer()();
+}

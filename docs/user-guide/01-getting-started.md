@@ -137,6 +137,7 @@ in Settings › Appearance.
 | `F2` | Start a new bill |
 | `F3` | Jump to the search box |
 | `F4` | Jump to the customer name |
+| `F6` | Hold the bill (serve the next customer); on an empty bill, list the held bills |
 | `F8` | Change the payment mode: Cash → UPI → Card → Credit |
 | `F10` | Save the bill (and print it, if automatic printing is on) |
 | `Esc` | Close the batch list or substitutes, or clear the search |

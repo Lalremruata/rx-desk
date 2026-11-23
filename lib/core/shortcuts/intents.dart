@@ -29,12 +29,18 @@ class CloseListIntent extends Intent {
   const CloseListIntent();
 }
 
-/// F2 new bill · F3 search · F4 customer · F8 payment mode ·
-/// F10 save & print · Esc close list.
+/// F6: hold the bill, or (empty bill) list the held bills.
+class HoldBillIntent extends Intent {
+  const HoldBillIntent();
+}
+
+/// F2 new bill · F3 search · F4 customer · F6 hold / recall ·
+/// F8 payment mode · F10 save & print · Esc close list.
 const Map<ShortcutActivator, Intent> billingShortcuts = {
   SingleActivator(LogicalKeyboardKey.f2): NewBillIntent(),
   SingleActivator(LogicalKeyboardKey.f3): FocusSearchIntent(),
   SingleActivator(LogicalKeyboardKey.f4): FocusCustomerIntent(),
+  SingleActivator(LogicalKeyboardKey.f6): HoldBillIntent(),
   SingleActivator(LogicalKeyboardKey.f8): CyclePaymentIntent(),
   SingleActivator(LogicalKeyboardKey.f10): SaveBillIntent(),
   SingleActivator(LogicalKeyboardKey.escape): CloseListIntent(),

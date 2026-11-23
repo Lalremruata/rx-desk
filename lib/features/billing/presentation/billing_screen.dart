@@ -15,6 +15,7 @@ import '../application/bill_controller.dart';
 import '../application/new_bill_request.dart';
 import 'bill_details.dart';
 import 'bill_grid.dart';
+import 'held_bills_dialog.dart';
 import 'search_panel.dart';
 
 /// Billing / POS (SPEC §5.2): keyboard-first. Left 3/5 search + bill,
@@ -85,6 +86,7 @@ class _BillingScreenState extends ConsumerState<BillingScreen> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         SearchPanel(focusNode: _search),
+        const HoldBar(),
         const SizedBox(height: AppSpace.lg),
         const BillGrid(),
         if (showHints) ...[const SizedBox(height: AppSpace.md), const _KeyHints()],
@@ -102,6 +104,9 @@ class _BillingScreenState extends ConsumerState<BillingScreen> {
           CyclePaymentIntent: CallbackAction<CyclePaymentIntent>(onInvoke: (_) => _bill.cyclePayment()),
           SaveBillIntent: CallbackAction<SaveBillIntent>(onInvoke: (_) => _save()),
           CloseListIntent: CallbackAction<CloseListIntent>(onInvoke: (_) => _bill.escape()),
+          HoldBillIntent: CallbackAction<HoldBillIntent>(
+            onInvoke: (_) => ref.read(billControllerProvider).isEmpty ? showHeldBillsDialog(context) : _bill.hold(),
+          ),
         },
         child: Focus(
           autofocus: true,
@@ -150,6 +155,7 @@ class _KeyHints extends StatelessWidget {
             KeyHint('F2', label: 'New bill'),
             KeyHint('F3', label: 'Search'),
             KeyHint('F4', label: 'Customer'),
+            KeyHint('F6', label: 'Hold / recall'),
             KeyHint('F8', label: 'Payment mode'),
             KeyHint('F10', label: 'Save & print'),
             KeyHint('Esc', label: 'Close list'),

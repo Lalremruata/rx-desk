@@ -7,7 +7,7 @@ import 'fts.dart';
 
 /// Current schema version. Every bump needs a step in [_steps] and a test in
 /// test/dao/migration_test.dart (CLAUDE.md rule 10).
-const int latestSchemaVersion = 12;
+const int latestSchemaVersion = 13;
 
 /// `_steps[v]` migrates schema v → v + 1.
 final Map<int, Future<void> Function(AppDatabase db, Migrator m)> _steps = {
@@ -125,6 +125,10 @@ final Map<int, Future<void> Function(AppDatabase db, Migrator m)> _steps = {
       if (!await _hasColumn(db, 'receipt_lines', c.name)) await m.addColumn(db.receiptLines, c);
     }
   },
+  // v12 → v13: held (parked) bills at the counter (SPEC §5.2).
+  12: (db, m) async {
+    if (!await _hasTable(db, 'held_bills')) await m.createTable(db.heldBills);
+  },
 };
 
 /// Adds `acceptReturns` to a stored Pharmacist permission list (v5). Stores
@@ -162,6 +166,10 @@ Future<void> grantRolePermissions(GeneratedDatabase db, Map<String, List<String>
     [jsonEncode(decoded)],
   );
 }
+
+Future<bool> _hasTable(AppDatabase db, String table) async =>
+    (await db.customSelect("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?1", variables: [Variable.withString(table)]).get())
+        .isNotEmpty;
 
 Future<bool> _hasColumn(AppDatabase db, String table, String column) async {
   final cols = await db.customSelect('PRAGMA table_info($table)').get();

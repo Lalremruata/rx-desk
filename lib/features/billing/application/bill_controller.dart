@@ -3,12 +3,15 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
+import '../../../core/db/app_database.dart';
 import '../../../core/db/daos/sales_dao.dart';
 import '../../../core/db/models.dart';
 import '../../../core/money/gst.dart';
 import '../../../core/money/paise.dart';
 import '../../../core/sales/bill_rules.dart';
 import '../../../core/sales/credit_rules.dart';
+import '../../../core/sales/held_bill.dart';
+import '../../../core/utils/expiry.dart';
 import '../../../core/utils/pack.dart';
 import '../../../core/widgets/widgets.dart';
 import '../../invoices/application/invoice_printer.dart';
@@ -339,6 +342,139 @@ class BillController extends _$BillController {
     if (announce) _toast('New bill started');
   }
 
+  // ---------------------------------------------------------------------------
+  // Hold / recall (SPEC §5.2)
+
+  /// F6: parks the bill and starts a fresh one. Nothing is reserved; stock
+  /// and prices are checked again on recall and on save.
+  Future<bool> hold() async {
+    if (state.isEmpty || state.saving) return false;
+    final data = HeldBillData(
+      lines: [
+        for (final l in state.lines)
+          HeldLine(productId: l.productId, batchId: l.batchId, qty: l.qty, loose: l.loose, mrpPaise: l.mrp.value, gstRate: l.gstRate),
+      ],
+      customer: state.customer,
+      phone: state.phone,
+      doctor: state.doctor,
+      discountPct: state.discountPct,
+      discountCustom: state.discountCustom,
+      discountKind: state.discountKind.name,
+      discountInput: state.discountInput,
+      payment: state.payment,
+      paidNow: state.paidNow,
+      paidNowMode: state.paidNowMode,
+    );
+    try {
+      await _repo.holdBill(
+        label: heldBillLabel(state.customer, state.lines.first.name, state.lines.length),
+        data: data,
+        itemCount: state.lines.length,
+        total: totalsFor(state, _settings).total,
+        staffId: ref.read(sessionProvider)?.staffId,
+      );
+    } on HeldBillException catch (e) {
+      _toast(e.message, warn: true);
+      return false;
+    }
+    newBill(announce: false);
+    _toast('Bill held — F6 to recall');
+    return true;
+  }
+
+  /// Puts a held bill back on the counter. A bill already open is held
+  /// first (swap). Lines are rebuilt from today's stock: expired, sold-out
+  /// or no-longer-sold items are dropped, short ones are cut to what's
+  /// left, and changed prices are named.
+  Future<void> recall(int id) async {
+    if (state.saving) return;
+    if (!state.isEmpty && !await hold()) return;
+    final held = await _repo.takeHeldBill(id);
+    if (held == null) return;
+    final data = HeldBillData.decode(held.payload);
+    final now = _repo.now;
+    final products = {for (final p in await _repo.stockRows(data.lines.map((l) => l.productId).toSet().toList())) p.id: p};
+    final notes = <String>[];
+    final lines = <BillLine>[];
+    for (final h in data.lines) {
+      final p = products[h.productId];
+      final batches = p == null ? const <StockBatch>[] : await _repo.batchesOf(p.id);
+      final b = batches.where((x) => x.id == h.batchId).firstOrNull;
+      if (p == null || b == null) {
+        notes.add('an item is no longer sold');
+        continue;
+      }
+      if (isExpired(b.expiry, now)) {
+        notes.add('${p.name} batch ${b.batchNo} has expired');
+        continue;
+      }
+      if (p.isRx && !ref.read(canProvider(Permission.sellRx))) {
+        notes.add('your role can’t sell ${p.name}');
+        continue;
+      }
+      final size = p.packSize < 1 ? 1 : p.packSize;
+      var qty = h.qty;
+      var loose = h.loose && size > 1;
+      if (qty > b.qty && !_settings.allowNegativeStock) {
+        if (b.qty <= 0) {
+          notes.add('${p.name} is sold out in batch ${b.batchNo}');
+          continue;
+        }
+        qty = loose || size == 1 ? b.qty : b.qty ~/ size * size;
+        if (qty == 0) {
+          qty = b.qty;
+          loose = true;
+        }
+        notes.add('only ${formatPackQty(b.qty, size, p.category)} of ${p.name} left');
+      }
+      final mrp = Paise(b.mrpPaise);
+      if (mrp.value != h.mrpPaise) notes.add('MRP of ${p.name} is now ${formatInr(mrp)}');
+      if (p.gstRate != h.gstRate) notes.add('GST of ${p.name} is now ${p.gstRate}%');
+      lines.add(
+        BillLine(
+          productId: p.id,
+          batchId: b.id,
+          name: p.name,
+          salt: p.salt,
+          maker: p.maker,
+          schedule: p.schedule,
+          batchNo: b.batchNo,
+          expiry: b.expiry,
+          mrp: mrp,
+          gstRate: p.gstRate,
+          qty: qty,
+          maxQty: b.qty,
+          packSize: size,
+          category: p.category,
+          loose: loose,
+        ),
+      );
+    }
+    final payment = data.payment == creditMode && !_canCredit ? _settings.defaultPayment : data.payment;
+    _debounce?.cancel();
+    state = BillState(
+      lines: lines,
+      customer: data.customer,
+      phone: data.phone,
+      doctor: data.doctor,
+      discountPct: data.discountPct,
+      discountCustom: data.discountCustom,
+      discountKind: data.discountKind == DiscountKind.flat.name ? DiscountKind.flat : DiscountKind.percent,
+      discountInput: data.discountInput,
+      payment: payment,
+      paidNow: data.paidNow,
+      paidNowMode: data.paidNowMode,
+      focusSearchToken: state.focusSearchToken + 1,
+      focusCustomerToken: state.focusCustomerToken,
+    );
+    _toast(
+      notes.isEmpty ? 'Bill for ${held.label} recalled' : 'Bill for ${held.label} recalled — ${notes.join('; ')}',
+      warn: notes.isNotEmpty,
+    );
+  }
+
+  Future<void> discardHeld(int id) => _repo.discardHeldBill(id);
+
   /// Keeps a chip discount within a newly lowered maximum. A typed discount
   /// is left as typed and flagged by [billDiscountProblemProvider].
   void clampDiscount(int max) {
@@ -435,9 +571,10 @@ class BillController extends _$BillController {
 
 /// Live totals for the current bill (SPEC §4.1).
 @riverpod
-BillTotals billTotals(Ref ref) {
-  final bill = ref.watch(billControllerProvider);
-  final s = ref.watch(settingsProvider);
+BillTotals billTotals(Ref ref) => totalsFor(ref.watch(billControllerProvider), ref.watch(settingsProvider));
+
+/// Totals for [bill] under settings [s] (SPEC §4.1).
+BillTotals totalsFor(BillState bill, AppSettings s) {
   final amounts = discountedLines(
     [for (final l in bill.lines) (mrp: l.mrp, qty: l.qty, gstRate: l.gstRate, packSize: l.packSize)],
     bill.discount,
@@ -501,3 +638,6 @@ Future<int> catalogueSize(Ref ref) {
   ref.watch(salesVersionProvider);
   return ref.watch(salesRepositoryProvider).productCount();
 }
+
+/// Bills parked at the counter, oldest first (SPEC §5.2).
+final heldBillsProvider = StreamProvider.autoDispose<List<HeldBill>>((ref) => ref.watch(salesRepositoryProvider).watchHeldBills());
