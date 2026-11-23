@@ -7,6 +7,8 @@ information: nothing on it changes your data.
 
 **Who can see it:** everyone.
 
+![The Dashboard](images/03-dashboard.png)
+
 ## The four tiles at the top
 
 | Tile | What it shows | Tap it to… |

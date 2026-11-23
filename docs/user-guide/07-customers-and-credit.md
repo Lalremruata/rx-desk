@@ -32,6 +32,8 @@ How to make a credit bill at the counter is covered in [Billing › Credit bills
 Customers are created automatically when you bill someone with a phone number. You can also press
 **Add customer**.
 
+![Customers and what each one owes](images/07-customers.png)
+
 ## Add or edit a customer
 
 1. Press **Add customer**, or **Edit** in a statement.
@@ -70,6 +72,8 @@ Customers are created automatically when you bill someone with a phone number. Y
 - Entry types: **Opening dues**, **Bill**, **Payment**, **Credit note**.
 - **Print statement** prints an A4 statement to give the customer.
 - **Export** saves it as Excel.
+
+![A customer's statement](images/07-statement.png)
 
 ### Opening dues (Owner)
 

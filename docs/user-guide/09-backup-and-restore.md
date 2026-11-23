@@ -12,6 +12,8 @@ can't export backups."*
 The tiles at the top show **Storage** (on this device), **Records** (how many medicines and
 invoices) and **Last backup**.
 
+![Backup & restore](images/09-backup.png)
+
 ## Make a backup now
 
 1. Go to **Backup & restore** (or press **Back up now** on the menu card).

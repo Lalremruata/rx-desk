@@ -24,7 +24,9 @@ For each line of the bill:
 
 1. **Amount at MRP** = MRP × quantity. For loose tablets: MRP × tablets ÷ tablets per strip,
    rounded down to the paisa.
-2. **Discount** = amount × discount %, rounded to the paisa.
+2. **Discount** = amount × discount %, rounded to the paisa. With a flat **₹** discount, the
+   rupees are shared across the lines in proportion to each line's amount, to the paisa; the
+   shares add up exactly to the ₹ typed.
 3. **Net** = amount − discount.
 4. **Taxable value** = net × 100 ÷ (100 + GST rate), rounded to the paisa.
 5. **GST** = net − taxable value.
@@ -97,9 +99,27 @@ The remaining batches have probably expired, which shows as **Expired · blocked
 list. Return them to the stockist from **Purchases › Dues › Statement › Return / credit note**.
 
 **Stock is wrong for a batch.**
-Use **Receive** in Inventory to add stock. To take stock out, return it to the stockist
-(**Purchases › Dues › Statement › Return / credit note**). Expired or damaged stock goes back
-that way too.
+Open the medicine in **Inventory**, press the pencil button on the batch and type the
+**Counted quantity**, with a reason (Count correction, Damaged, Lost / theft or Other). To send
+stock back to the stockist, use **Purchases › Dues › Statement › Return / credit note**
+instead, so their credit is recorded too.
+
+**A batch number or expiry was typed wrong.**
+Use **Edit batch** (the pencil on the batch row) to fix it. An expiry that has already passed
+is locked, because expired stock can never be sold.
+
+**The MRP of a medicine changed.**
+Use **Inventory › Edit medicine**. The new MRP applies to new bills only; saved bills keep
+their old price.
+
+**We stopped selling a medicine.**
+Use **Hide medicine**. It leaves search and the stock lists but nothing is deleted; bring it
+back from **Inventory › Hidden**.
+
+**Stock arrived in boxes. How many strips is that?**
+On the receipt line, choose **Box** and type **Strips per box**. RxDesk multiplies it out and
+remembers the number for that medicine (see
+[Receiving in boxes](05-purchases.md#receiving-in-boxes-strips-per-box)).
 
 **Somebody forgot their PIN.**
 The Owner sets a new one in **Settings › Staff & roles › Reset PIN**. An Owner's PIN can only be
@@ -136,6 +156,7 @@ the **Lines** view for the month.
 | **Closed short** | An order line where the stockist won't send the rest |
 | **Damdawi lak na** | "Where to get medicines": your stockist directory sheet |
 | **MR** | Medical Representative of a pharmaceutical company |
+| **Strips per box** | How many strips (or packs) come in one stockist box. Used when receiving in boxes. |
 | **Reorder level** | When stock falls to this many packs, the medicine shows as low |
 | **Dead stock** | Stock that hasn't sold for a long time (90 days unless changed) |
 | **Lead time** | How many days a stockist takes to deliver after you order |

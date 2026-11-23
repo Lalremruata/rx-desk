@@ -16,6 +16,10 @@ import '../application/app_section.dart';
 import '../application/shell_status.dart';
 import 'shell_parts.dart';
 
+/// Debug builds list the widget gallery in the menu. The user-guide
+/// screenshot run turns it off so pictures match a release build.
+bool debugShowWidgetGallery = kDebugMode;
+
 /// Which chrome the shell is using at the current width (SPEC §2).
 enum ShellLayout {
   /// ≥ 1100: 236 px sidebar.
@@ -143,7 +147,7 @@ class _Sidebar extends ConsumerWidget {
                       NavTile(section: s, selected: s == current, onTap: () => onSelect(s)),
                       const SizedBox(height: AppSpace.xs),
                     ],
-                    if (kDebugMode) ...[
+                    if (debugShowWidgetGallery) ...[
                       const SizedBox(height: AppSpace.sm),
                       NavTile(
                         section: AppSection.gallery,
@@ -177,7 +181,7 @@ class _Rail extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final count = ref.watch(storedMedicineCountProvider).value ?? 0;
     final last = ref.watch(lastBackupLabelProvider).value ?? 'Never';
-    final items = [...AppSection.nav, if (kDebugMode) AppSection.gallery];
+    final items = [...AppSection.nav, if (debugShowWidgetGallery) AppSection.gallery];
     return Container(
       key: const ValueKey('shell-rail'),
       width: AppSizes.rail,
@@ -351,7 +355,7 @@ class _CompactScaffold extends ConsumerWidget {
   }
 
   Future<void> _showMore(BuildContext context, WidgetRef ref) async {
-    final items = [...AppSection.compactMore, if (kDebugMode) AppSection.gallery];
+    final items = [...AppSection.compactMore, if (debugShowWidgetGallery) AppSection.gallery];
     final picked = await showModalBottomSheet<AppSection>(
       context: context,
       builder: (context) => SafeArea(

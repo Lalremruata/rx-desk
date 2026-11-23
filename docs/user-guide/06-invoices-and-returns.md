@@ -20,6 +20,8 @@ Badges in the list: **Cancelled**, **Part returned**, **Returned** and **Credit 
 Click a bill to see it on the right exactly as it prints. If it has credit notes, links to them
 appear under it. A credit note links back to its bill.
 
+![Invoices: the list and the selected bill](images/06-invoices.png)
+
 ## Reprint or save as PDF
 
 - **Print** sends the bill to the printer, using the paper size from Settings › Invoice.
@@ -58,6 +60,8 @@ and earlier months stay exactly as they were.
 5. **Reason** (optional), e.g. *"doctor changed the medicine"*.
 6. Check the refund total at the bottom (units, taxable, GST, round off) and press **Save & print
    credit note**. It reads **Save credit note** if automatic printing is off.
+
+![Return items: choosing what comes back and the refund](images/06-return.png)
 
 ### Rules for returns
 

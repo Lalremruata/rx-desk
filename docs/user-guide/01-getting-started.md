@@ -2,6 +2,26 @@
 
 [← Contents](README.md)
 
+## Installing RxDesk on Windows
+
+RxDesk comes as one setup file, **RxDesk-Setup-*version*.exe**.
+
+1. Double-click the setup file. If Windows asks *"Do you want to allow this app to make changes?"*,
+   choose **Yes**.
+2. Follow the steps. Tick **Create a desktop shortcut** if you want an RxDesk icon on the desktop.
+3. On the last page, leave **Launch RxDesk** ticked and press **Finish**.
+
+- If the computer doesn't have the Microsoft Visual C++ runtime, the setup installs it for you.
+  It needs Windows 10 or later (64-bit).
+- **Updating:** run the newer setup file over the old one. Your medicines, bills and settings
+  stay as they are. If the update changes how data is stored, RxDesk upgrades the data the first
+  time it opens. (Take a backup before updating, just in case. See
+  [Backup and restore](09-backup-and-restore.md).)
+- **Uninstalling** removes the program only. Your pharmacy data and backups are kept in your
+  Windows user folder and are never deleted by the uninstaller.
+
+![The PIN lock screen](images/01-lock-screen.png)
+
 ## First launch: create the Owner account
 
 The first time RxDesk opens, it shows *"Welcome to RxDesk. Create the owner account to start."*
@@ -33,9 +53,11 @@ When RxDesk is locked, it shows *"Locked — choose your name and enter your PIN
 - **Wrong PIN.** After too many wrong tries, RxDesk shows *"Too many wrong PINs — try again in
   30 seconds"*.
 - **Forgotten PIN.** The Owner can set a new PIN for any staff member (see
-  [Staff and permissions](11-staff-and-permissions.md#reset-a-pin)).
+  [Staff and permissions](11-staff-and-permissions.md#change-a-role-reset-a-pin-disable-an-account)).
 
 ## The screen
+
+![The Billing screen with the menu on the left](images/01-screen-layout.png)
 
 ### Menu (left side)
 
@@ -94,7 +116,9 @@ Before the first real bill, work through these. Each one is explained in [Settin
 5. **Settings › Staff & roles.** Add each Pharmacist and Cashier with their own PIN, and check
    what each role is allowed to do.
 6. **Inventory.** Add your medicines with their opening stock (or have them loaded for you), and
-   set **Tablets per strip** for anything you sell loose.
+   set **Tablets per strip** for anything you sell loose. If you buy a medicine in boxes, you can
+   also fill in **Strips per box**. If you leave it blank, RxDesk asks the first time that medicine
+   arrives in boxes.
 7. **Purchases › Stockists.** Import your *Damdawi lak na* sheet if you have one.
 8. **Customers.** Enter **Opening dues** for customers who already owe you (from the khata book).
    Enter each stockist's **Opening balance** in **Purchases › Dues**.

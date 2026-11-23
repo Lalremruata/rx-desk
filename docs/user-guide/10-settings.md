@@ -33,6 +33,8 @@ Settings has six tabs: **Store profile · Invoice · Billing & tax · Inventory 
 | **Drug licence – Form 20B**, **Drug licence – Form 21B** | Retail licence numbers |
 | **Registered pharmacist in charge**, **Pharmacist registration no.** | Printed under the signature |
 
+![Settings › Store profile](images/10-settings-store.png)
+
 ## Invoice
 
 *Numbering, layout, printing.* A **live preview** on the right redraws the sample bill as you
@@ -90,11 +92,13 @@ These settings apply to new bills only.
 | **MRP includes GST** | On (locked) | Medicine MRP always includes tax, so tax is worked out from it |
 | **Round total to the nearest rupee** | On | Adds a round-off line to the bill |
 
+![Settings › Billing & tax](images/10-settings-billing.png)
+
 ### Billing rules
 
 | Setting | Default | Notes |
 |---|---|---|
-| **Highest discount allowed** | 15% | 0%, 5%, 10%, 15% or 20%. Higher discount buttons are hidden at the counter. |
+| **Highest discount allowed** | 15% | 0%, 5%, 10%, 15% or 20%. Higher discount buttons are hidden at the counter. A **Custom** % or ₹ discount can't go above it either. |
 | **Default payment mode** | Cash | Cash, UPI or Card. Selected when a new bill starts. |
 | **Ask for the doctor on Schedule H / H1 items** | On | The bill can't be saved until the doctor is entered |
 | **Block expired batches** | On (locked) | Selling expired medicine is never allowed |

@@ -25,11 +25,11 @@ Cashiers).
 
 ## Contents
 
-1. [Getting started](01-getting-started.md): first launch, PIN login, the screen layout, first-day setup, keyboard shortcuts
-2. [Billing](02-billing.md): searching, batches, loose tablets, discounts, prescriptions, payment, credit bills, saving and printing
+1. [Getting started](01-getting-started.md): installing on Windows, first launch, PIN login, the screen layout, first-day setup, keyboard shortcuts
+2. [Billing](02-billing.md): searching, batches, loose tablets, discounts (chips, custom % or ₹), prescriptions, payment, credit bills, saving and printing
 3. [Dashboard](03-dashboard.md): today's numbers, sales charts, what needs attention
-4. [Inventory](04-inventory.md): stock by batch and expiry, adding medicines, receiving stock, loose selling
-5. [Purchases](05-purchases.md): order book, receiving stockist invoices, stockist dues and payments, the stockist directory
+4. [Inventory](04-inventory.md): stock by batch and expiry, adding, editing and hiding medicines, correcting batches, receiving stock, loose selling
+5. [Purchases](05-purchases.md): order book, receiving stockist invoices (including boxes → strips), stockist dues and payments, the stockist directory
 6. [Invoices and returns](06-invoices-and-returns.md): finding and reprinting bills, cancelling, sales returns and credit notes
 7. [Customers and credit](07-customers-and-credit.md): udhaar, customer dues, payments and statements
 8. [Reports](08-reports.md): the Sales register, GST and Schedule H registers, the Inventory Management Register

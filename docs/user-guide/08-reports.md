@@ -9,6 +9,8 @@
 The Sales register has **one row per item sold**. Use it to look up any sale, check totals, and
 export for your accountant or GST filing. It opens on **This month**.
 
+![The Sales register grouped by day](images/08-sales-register.png)
+
 ### Saved reports (one click)
 
 | Report | What it shows |
@@ -79,6 +81,8 @@ stock to keep.
 - **‹** / **›** change the month. **Find a medicine…** searches.
 - **Medicines:** **Sold this month** or **All medicines**.
 - Quantities are tablets for medicines sold loose, otherwise packs. Returns are taken off.
+
+![The Inventory Management Register](images/08-consumption.png)
 
 ### The columns
 

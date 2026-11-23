@@ -36,6 +36,8 @@ Each person's row shows their name, role, and whether they're **Active** or **Di
 
 Staff accounts are never deleted, so the record of who made each bill stays complete.
 
+![Staff & roles: accounts and the permissions table](images/11-staff.png)
+
 ## What each role can do
 
 The table **What each role can do** sets the permissions. Click a box to switch it on or off for
@@ -44,9 +46,9 @@ Pharmacist or Cashier, then press **Save changes**. These are the starting setti
 | Permission | Owner | Pharmacist | Cashier | What it covers |
 |---|:-:|:-:|:-:|---|
 | **Sell Schedule H / H1 medicines** | ✓ | ✓ | — | Billing prescription medicines |
-| **Give more than 5% discount** | ✓ | ✓ | — | Discount chips above 5% |
+| **Give more than 5% discount** | ✓ | ✓ | — | Discount chips above 5%, and a **Custom** % or ₹ discount that comes to more than 5% of the MRP |
 | **Edit or cancel a saved bill** | ✓ | ✓ | — | **Cancel bill** in Invoices |
-| **Change stock, prices and batches** | ✓ | ✓ | — | Add medicine, receive stock, pack sizes, orders, receiving invoices, stockist directory, applying reorder levels |
+| **Change stock, prices and batches** | ✓ | ✓ | — | Add, edit and hide medicines, receive stock, edit batches and correct counts, pack sizes, orders, receiving invoices, stockist directory, applying reorder levels |
 | **See sales register and reports** | ✓ | ✓ | — | Sales register and the Inventory Management Register |
 | **Export or restore backups** | ✓ | — | — | Backup & restore |
 | **Change settings** | ✓ | — | — | All of Settings |

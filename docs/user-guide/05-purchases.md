@@ -24,6 +24,8 @@ prices and batches*).
 The tabs below are **Pending · Order book · Receipts · Dues · Stockists**. The two main buttons are
 **New order** and **Receive invoice**.
 
+![Purchases: tiles, tabs and the Pending list](images/05-purchases-pending.png)
+
 ---
 
 ## Place an order
@@ -37,6 +39,8 @@ The tabs below are **Pending · Order book · Receipts · Dues · Stockists**. T
 4. **Add low-stock items** fills in every medicine at or below its reorder level, with a
    suggested quantity. Medicines already on the order are skipped.
 5. Press **Save order**.
+
+![New order with a catalogue item and a free-text item](images/05-new-order.png)
 
 You don't pick the stockist when ordering. RxDesk records whoever supplies the item when the goods arrive.
 
@@ -66,12 +70,16 @@ the stockist's bill.
 2. **Their invoice no.**, as printed (e.g. *FP/401/26-27*), and **Received on**.
 3. For each line:
    - **Medicine**. If the item was ordered as free text, RxDesk asks you to *"Pick the medicine it
-     is, or add it to the catalogue"*. This link is remembered.
+     is, or add it to the catalogue"*. This link is remembered. If you choose **Add new medicine**
+     here, the form has no opening-stock fields, because this receipt line adds the stock.
    - **Qty received** and **Unit**.
+   - **Strips per box**: only for a line in **Box**. See
+     [Receiving in boxes](#receiving-in-boxes-strips-per-box) below.
    - **Batch no.**: an existing batch adds to it (*"Adding to batch …"*). A new number creates a
      new batch, which needs an **Expiry** (MM/YYYY).
-   - **Add to stock**: how much goes into stock, in strips for loose-sold medicines. It is filled
-     in from the quantity.
+   - **Add to stock**: how many strips (or packs) go into stock. It is filled in from the
+     quantity: one per Strip, Bottle, Tube and so on, or quantity × strips per box for Box. You
+     can change it.
    - **Amount (₹)**: the line amount *as on their invoice*.
    - **Still expecting more from this order**: turn it off if the rest isn't coming, and the line is
      closed short. If the unit differs from the order (ordered 1 Box, got 10 Strip), the line is
@@ -92,6 +100,31 @@ RxDesk then:
 - puts the bill on the stockist's dues,
 - remembers that this stockist supplies these medicines.
 
+### Receiving in boxes (strips per box)
+
+Stock is always counted in strips (or packs), but stockists often send boxes. When a line's unit
+is **Box**, RxDesk asks **Strips per box** (**Packs per box** for non-tablets) and works out
+the stock for you.
+
+**Example:** you ordered *Dolo 10 Box*, and each box holds 15 strips.
+
+1. On the receipt line, pick the medicine (if it was ordered as free text).
+2. **Qty received** `10`, **Unit** **Box**.
+3. **Strips per box** `15`. **Add to stock** fills in **150**, and the line shows
+   *"10 Box × 15 = 150 strips"*.
+4. Fill in the batch, expiry and amount as usual, and save.
+
+- **RxDesk remembers it.** The number is saved on the medicine with the receipt. The next time
+  that medicine arrives in boxes, **Strips per box** is already filled in, and the line says
+  when a number you type will replace the remembered one.
+- A Box line can't be saved without strips per box (*"How many strips in a box?"*). It must be
+  1–500.
+- **Add to stock** can still be changed by hand, for example if a box came short.
+- You can also set or correct the number in **Inventory › Edit medicine › Strips per box**.
+- For loose-sold medicines, stock is still typed in strips. RxDesk converts it to tablets itself.
+
+![Receiving 10 Box of a free-text order line: strips per box and the stock it adds](images/05-receive-box.png)
+
 Things to know:
 
 - **An expiry that has already passed is refused:** *"Expired … — expired stock can't be
@@ -101,6 +134,8 @@ Things to know:
 - **There is no GST calculation on purchases.** Amounts are stored exactly as entered.
 
 ## Order book
+
+![The Order book for one day](images/05-order-book.png)
 
 **Order book** shows one day at a time, laid out like your paper order sheet: S/N, date, **Name
 of item**, **Quantity**, **Supplied by**, invoice number, **Qty received**, **Amount** and
@@ -125,6 +160,8 @@ invoice's items, with batch, expiry, qty, stock added and amount.
 
 **Dues** has one row per stockist: **Stockist**, **Credit** days, **Open bills**, **Owed**,
 **Overdue**, **Oldest due**, then **Pay** and **Statement**. The most overdue stockists come first.
+
+![Dues: what you owe each stockist](images/05-dues.png)
 
 - A bill is **overdue** when something is still owed after its due date.
 - A negative balance (**on account**) means you've paid the stockist in advance.
@@ -176,6 +213,8 @@ Balance**, oldest first.
 ---
 
 ## Stockists directory ("Damdawi lak na")
+
+![The stockist directory](images/05-stockists.png)
 
 The **Stockists** tab answers "where do I get this medicine?". Each line links a medicine to a
 stockist, with the stockist's phone numbers, the company's MR (name and phone), a note and when

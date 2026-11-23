@@ -6,8 +6,10 @@ Inventory lists every medicine with its stock kept **batch by batch**: each batc
 batch number, expiry and quantity.
 
 **Who can see it:** everyone.
-**Who can change it** (add medicines, receive stock, pack sizes): Owner and Pharmacist
-(permission *Change stock, prices and batches*).
+**Who can change it** (add, edit and hide medicines, receive stock, correct batches, pack sizes):
+Owner and Pharmacist (permission *Change stock, prices and batches*).
+
+![Inventory: saved views, filters and the stock list](images/04-inventory-list.png)
 
 ## Views
 
@@ -20,6 +22,7 @@ The tabs across the top are saved views, each with a count:
 | **Expiring ≤ Nd** | Medicines with a batch expiring inside your warning window (90 days unless changed in Settings › Inventory) |
 | **Out of stock** | Nothing saleable left |
 | **Dead stock** | In stock but not sold for 90 days (changeable in Settings › Inventory) |
+| **Hidden** | Medicines taken off sale with **Hide medicine**. Only here; every other view leaves them out. |
 
 ## Search, filter and sort
 
@@ -53,6 +56,10 @@ Click a row (or **Show batches**) to open it. You'll see:
 - **GET FROM:** the stockists this medicine comes from, with phone numbers, the MR and the last
   received date (from the [stockist directory](05-purchases.md#stockists-directory-damdawi-lak-na)).
 - **Sold whole only** or **10 tabs per strip · sold loose**, with a **Sell loose…** or **Change** button.
+- **Edit medicine** and **Hide medicine** buttons, and an edit (pencil) button on every batch row
+  (see [Change a medicine or a batch](#change-a-medicine-or-a-batch)).
+
+![A medicine opened to show its batches and details](images/04-inventory-batches.png)
 
 ## Add a medicine
 
@@ -74,7 +81,26 @@ Click a row (or **Show batches**) to open it. You'll see:
    - **MRP (₹, incl. GST)**: the MRP printed on the pack, per strip / pack. Required.
    - **GST rate**: **0%**, **5%**, **12%** or **18%**.
    - **HSN code** (e.g. 3004) and **Rack / shelf**.
+   - **Strips per box** (**Packs per box** for syrups and other non-tablets): how many strips
+     come in one box from the stockist. Optional. RxDesk uses it when you receive this medicine
+     in boxes (see [Purchases › Receive](05-purchases.md#receiving-in-boxes-strips-per-box)).
+     Leave it blank if you don't know yet; RxDesk will ask the first time a box arrives.
 3. Press **Save medicine**.
+
+![The Add medicine form](images/04-add-medicine.png)
+
+### Two medicines with the same name
+
+Names don't have to be unique, because one brand can come in more than one composition. But if
+you save a medicine whose name already exists, RxDesk stops and asks first:
+
+- **Same name and same salt:** *"This looks like a duplicate of a medicine you already have"*,
+  with the existing one listed. Usually you should press **Cancel** and receive the stock into
+  the existing medicine instead.
+- **Same name, different salt:** *"“…” already exists with a different composition"*. If that's
+  right, press **Save anyway**. Staff will see both in search, told apart by salt and maker.
+
+The same check runs when **Edit medicine** changes a name.
 
 ## Receive stock (without a stockist invoice)
 
@@ -91,6 +117,62 @@ Use this for quick additions. To record a stockist's invoice, its amount and wha
 
 Check the expiry before you receive a batch here. Expired stock can never be sold, so it has no
 place in stock. (Purchases › Receive invoice refuses an expiry that has already passed.)
+
+## Change a medicine or a batch
+
+**Who can do this:** Owner and Pharmacist (permission *Change stock, prices and batches*).
+
+### Edit medicine
+
+Open the medicine's row and press **Edit medicine**. It's the same form as Add medicine, without
+the first-batch fields: name, salt, maker, pack, category, schedule, barcode, reorder level, MRP,
+GST rate, HSN, rack and strips per box. Press **Save changes** when done.
+
+- **New MRP, GST rate or HSN** applies to **new bills only**. Bills already saved keep the price
+  and tax they were sold at, and so do the reports. The form reminds you: *"New MRP / GST / HSN
+  applies to new bills only — bills already saved keep what they were sold at."*
+- If a bill with this medicine is open at the counter while you change its price, the counter
+  is told to check the total before saving (*"… — bill updated, check the total and save
+  again"*).
+- **Tablets per strip** isn't changed here. Use **Sell loose…** / **Change** (below).
+
+![Edit medicine](images/04-edit-medicine.png)
+
+### Edit batch: fix the number or expiry, or correct the count
+
+Press the pencil button on a batch row (*"Edit batch … — number, expiry, counted stock"*).
+
+- **Batch no.** and **Expiry**: fix a typing mistake. An **expired** batch's expiry is locked
+  (*"Expired — locked; expired stock can't be sold"*), so expired stock can never be made
+  sellable again.
+- **Counted quantity**: what's actually on the shelf. For loose-sold medicines, type strips and
+  **+ loose tabs**. RxDesk shows the change, for example *"Stock 40 strips → 36 strips (−4
+  strips)"*.
+- When the quantity changes, choose a **Reason**: **Count correction**, **Damaged**, **Lost /
+  theft** or **Other**. Add a **Note** if you like, for example *"2 strips crushed in delivery"*.
+  For **Other**, the note is required.
+- **Recent movements** at the bottom shows the batch's history: opening stock, receipts, sales,
+  returns and corrections.
+- Press **Save**. The correction is recorded as a stock movement with its reason, so it can be
+  checked later.
+
+![Edit batch with a counted quantity and a reason](images/04-edit-batch.png)
+
+Damaged or expired stock that goes back to the stockist should be returned from
+**Purchases › Dues › Statement › Return / credit note** instead, so the stockist's credit is
+recorded too.
+
+### Hide a medicine
+
+**Hide medicine** takes a medicine off sale without deleting anything: for example, one you've
+stopped stocking or entered twice by mistake.
+
+- RxDesk asks first: *"Hide …? It leaves search, billing and the stock views."* If the medicine
+  still has stock, it says how much.
+- A hidden medicine doesn't appear in billing search, the stock views, low-stock lists or the
+  Dashboard counts. Its past bills and reports are unchanged.
+- To bring it back, open the **Hidden** view and press **Unhide** (or open the row and press
+  **Unhide medicine**). It's back on sale straight away.
 
 ## Sell loose tablets (set the pack size)
 

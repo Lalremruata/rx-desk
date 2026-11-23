@@ -18,6 +18,8 @@ payment and the save button.
 5. Repeat for each item.
 6. Press `F10` to save and print.
 
+![A bill with three items, a 5% discount, the totals and the payment mode](images/02-billing-bill.png)
+
 ## Finding a medicine
 
 The search box says *"Type medicine, salt or scan barcode… (F3)"*. Press `F3` from anywhere on
@@ -31,6 +33,8 @@ the Billing screen to jump to it.
   maker · pack, the rack, the stock and the MRP.
   - Stock in **green** means enough stock. **Amber "N left"** means stock is low. **Red "Out"** means out of stock.
 - No match? *"No medicine matches. Try the salt name, or press Esc to clear."*
+
+![Search results while typing](images/02-billing-search.png)
 
 **Quick add:** the chips under the search box are the 8 best-selling medicines of the last 30
 days. Tap one to add it.
@@ -46,6 +50,8 @@ RxDesk sells the batch that expires first ("First Expiry, First Out", FEFO):
 - **Expired batches** appear at the bottom, greyed out, tagged **Expired · blocked**. They can never
   be sold, and no setting changes that.
 - Press `Esc` to close the list without choosing.
+
+![The Choose batch list, with the batch that expires first highlighted](images/02-billing-batches.png)
 
 Adding the same batch again increases its quantity, up to the stock in that batch.
 
@@ -110,6 +116,29 @@ Tap a discount chip: **0%**, **5%**, **10%**, **15%** or **20%**. Chips above th
 more than 5% discount* (on for Pharmacists, off for Cashiers). The discount applies to every
 line of the bill.
 
+#### Custom discount: any % or a ₹ amount
+
+For a discount that isn't on a chip, press **Custom**. A small box opens with **%** and **₹**:
+
+- **%**: type a whole number, for example `7`. The note under the box reads *"Whole number, up
+  to 15%"*.
+- **₹**: type a flat amount off the bill, for example `25` or `12.50`. Underneath, RxDesk shows
+  what that comes to as a percentage of the MRP and the most you can give, for example *"= 4.6%
+  of the MRP · max ₹81.75"*.
+
+The same limits apply as for the chips. A ₹ amount is checked as a percentage of the bill's MRP
+total, so it can't go above **Highest discount allowed**. Anything above 5% needs *Give more
+than 5% discount*. If the discount is too high, the box turns red and the bill can't be saved,
+for example *"Discount can be at most 15% of the MRP (₹81.75)"*.
+
+A flat ₹ discount is shared out across the lines according to each line's MRP amount, to the
+paisa, and the shares always add up to exactly what you typed. Each line's GST is then worked
+out on its discounted amount (see
+[How GST is worked out](12-how-it-works-and-faq.md#how-gst-is-worked-out)). Tap a chip again to
+go back to a chip discount.
+
+![Custom discount of ₹25 with the percentage it comes to](images/02-billing-custom-discount.png)
+
 ### Totals
 
 The totals card shows **Items / units**, **Subtotal (MRP)**, **Discount**, **Taxable value**,
@@ -138,6 +167,8 @@ credit.
 4. The box shows *"Adds ₹X to dues → ₹Y"*. If that goes over the limit, it warns *"₹… over the limit
    — the Owner must allow it"*.
 5. Press **Save & print invoice** (`F10`).
+
+![A credit bill: customer, phone, paid now and the dues box](images/02-billing-credit.png)
 
 **Over the credit limit.** Saving stops and an **Over the credit limit** box explains how much the
 customer owes and how far over the limit this bill goes.
@@ -175,4 +206,6 @@ Press **Save & print invoice** or `F10`.
 | *… is Schedule X — it can't be sold from RxDesk* | Schedule X can't be billed in RxDesk. |
 | *Your role can't sell Schedule H / H1 medicines* | Ask a Pharmacist or the Owner to make the bill. |
 | *Your role can't give more than 5% discount* | Ask a Pharmacist or the Owner. |
+| *Discount can be at most N% of the MRP (₹…)* | The custom % or ₹ discount is above **Highest discount allowed**. Lower it. |
+| *… — bill updated, check the total and save again* | Someone changed the medicine's MRP or GST rate in Inventory while this bill was open. The line now has the new price. Check the total with the customer and press `F10` again. |
 | *Your role can't sell on credit* | Ask a Pharmacist or the Owner. |
