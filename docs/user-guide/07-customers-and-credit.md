@@ -37,7 +37,8 @@ Customers are created automatically when you bill someone with a phone number. Y
 ## Add or edit a customer
 
 1. Press **Add customer**, or **Edit** in a statement.
-2. Enter **Name**, **Phone**, and optionally **Address** and **Note** (e.g. *"pays on the 1st"*).
+2. Enter **Name**, **Phone**, and optionally **Address**, **GSTIN** (for B2B bills to a clinic or
+   hospital) and **Note** (e.g. *"pays on the 1st"*).
 3. **Credit limit** (Owner only): choose **Default** (the limit in Settings › Billing & tax) or
    **Own limit**, and enter the amount. Leave it empty for no limit.
 4. Press **Save**.

@@ -17,7 +17,11 @@ class BillRules {
     this.canGiveHighDiscount = true,
     this.canSellOnCredit = true,
     this.defaultCreditLimit = 0,
+    this.storeGstin = '',
   });
+
+  /// The store's own GSTIN: its state is the place of supply (SPEC §4.15).
+  final String storeGstin;
 
   final InvoiceNumberFormat numbering;
   final bool roundOff;
@@ -70,6 +74,8 @@ enum BillError {
   overCreditLimit,
   // Editable inventory (SPEC §5.3): MRP / GST changed while the bill was open.
   priceChanged,
+  // B2B bills (SPEC §4.15).
+  invalidGstin,
 }
 
 class BillException implements Exception {

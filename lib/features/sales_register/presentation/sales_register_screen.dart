@@ -24,6 +24,7 @@ import '../../staff/presentation/access_denied.dart';
 import '../application/register_controller.dart';
 import '../application/register_export.dart';
 import '../data/register_repository.dart';
+import 'gstr1_dialog.dart';
 
 /// Sales register (SPEC §5.5): one row per item sold.
 class SalesRegisterScreen extends ConsumerWidget {
@@ -68,6 +69,16 @@ class _SavedReports extends ConsumerWidget {
           side: const BorderSide(color: AppColors.border),
           shape: const StadiumBorder(),
           onPressed: () => context.go(Routes.consumption),
+        ),
+        ActionChip(
+          key: const ValueKey('saved-gstr1'),
+          avatar: const Icon(Icons.receipt_long_rounded, size: 16),
+          label: const Text('GSTR-1 (month)'),
+          labelStyle: AppType.smallStrong,
+          backgroundColor: AppColors.surface,
+          side: const BorderSide(color: AppColors.border),
+          shape: const StadiumBorder(),
+          onPressed: () => showGstr1Dialog(context),
         ),
       ],
     );

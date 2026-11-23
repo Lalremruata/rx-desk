@@ -100,6 +100,9 @@ abstract class BillState with _$BillState {
     @Default('') String customer,
     @Default('') String phone,
     @Default('') String doctor,
+
+    /// B2B bills (SPEC §4.15): the buyer's GSTIN; '' = B2C.
+    @Default('') String buyerGstin,
     /// Chip discount (SPEC §4.6); used unless [discountCustom].
     @Default(0) int discountPct,
 

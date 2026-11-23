@@ -142,8 +142,12 @@ Make a backup on the old one. On the new one, install RxDesk, create an Owner ac
 **Backup & restore › Choose backup file…**. See [Backup and restore](10-backup-and-restore.md).
 
 **What do I give the accountant for GST?**
-**Sales register › GST summary by HSN (last month) › Export Excel**. For a full listing, export
-the **Lines** view for the month.
+**Sales register › GSTR-1 (month) › Export Excel**: the month's b2b, b2cs, cdnr, HSN and
+documents tables. For a full listing, also export the **Lines** view for the month.
+
+**A clinic wants a bill with its GSTIN.**
+Type its GSTIN in **Buyer GSTIN** on the bill, with the clinic's name as the customer. Only
+GSTINs from your own state are accepted; RxDesk doesn't make inter-state (IGST) bills.
 
 ## Glossary
 

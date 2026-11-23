@@ -6,6 +6,7 @@ import '../../../core/money/gst.dart';
 import '../../../core/money/paise.dart';
 import '../../../core/sales/bill_rules.dart';
 import '../../../core/sales/credit_rules.dart';
+import '../../../core/tax/gstin.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/motion.dart';
 import '../../../core/theme/tokens.dart';
@@ -84,6 +85,10 @@ class BillDetails extends ConsumerWidget {
             inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9+ ]')), LengthLimitingTextInputFormatter(15)],
             onChanged: ctl.setPhone,
           ),
+          if (s.gstRegistered) ...[
+            const SizedBox(height: AppSpace.md),
+            _BuyerGstin(storeGstin: s.gstin),
+          ],
           const SizedBox(height: AppSpace.md),
           AppTextField(
             key: const ValueKey('bill-doctor'),
@@ -390,6 +395,51 @@ class _ManualDiscount extends ConsumerWidget {
             onSubmitted: (_) => ctl.requestSearchFocus(),
           ),
         ),
+      ],
+    );
+  }
+}
+
+/// B2B bills (SPEC §4.15): the buyer's GSTIN, checked as it's typed; a known
+/// customer's GSTIN can be filled in with one tap.
+class _BuyerGstin extends ConsumerWidget {
+  const _BuyerGstin({required this.storeGstin});
+
+  final String storeGstin;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final bill = ref.watch(billControllerProvider);
+    final ctl = ref.read(billControllerProvider.notifier);
+    final g = bill.buyerGstin;
+    final phone = bill.phone.trim();
+    final known = phone.isEmpty ? null : ref.watch(creditInfoProvider(phone)).value?.customer.gstin;
+    final problem = g.length < 15 && g.isNotEmpty ? null : buyerGstinProblem(g, storeGstin: storeGstin, gstRegistered: true);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        AppTextField(
+          key: const ValueKey('bill-gstin'),
+          fieldKey: const ValueKey('bill-gstin-field'),
+          label: 'Buyer GSTIN (B2B, optional)',
+          hint: 'For a clinic or hospital',
+          value: g,
+          error: problem,
+          helper: problem == null && g.length == 15 ? 'B2B tax invoice · place of supply ${placeOfSupplyLabel(gstinState(g))}' : null,
+          textCapitalization: TextCapitalization.characters,
+          inputFormatters: [FilteringTextInputFormatter.allow(RegExp('[0-9A-Za-z]')), LengthLimitingTextInputFormatter(15)],
+          onChanged: ctl.setBuyerGstin,
+        ),
+        if (g.isEmpty && known != null && known.isNotEmpty)
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton(
+              key: const ValueKey('bill-gstin-use'),
+              onPressed: () => ctl.setBuyerGstin(known),
+              child: Text('Use $known'),
+            ),
+          ),
       ],
     );
   }

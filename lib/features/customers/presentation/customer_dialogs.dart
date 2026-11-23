@@ -7,6 +7,7 @@ import '../../../core/db/daos/customers_dao.dart';
 import '../../../core/db/db_provider.dart';
 import '../../../core/money/paise.dart';
 import '../../../core/sales/credit_rules.dart';
+import '../../../core/tax/gstin.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/tokens.dart';
 import '../../../core/utils/expiry.dart';
@@ -637,6 +638,7 @@ class _CustomerEditDialogState extends ConsumerState<CustomerEditDialog> {
   late String phone = widget.dues?.phone ?? '';
   late String address = widget.dues?.address ?? '';
   late String note = widget.dues?.note ?? '';
+  late String gstin = widget.dues?.gstin ?? '';
 
   /// Own limit; null = use the default.
   late bool ownLimit = widget.dues?.creditLimit != null;
@@ -650,10 +652,10 @@ class _CustomerEditDialogState extends ConsumerState<CustomerEditDialog> {
       final g = ref.read(guardedActionsProvider);
       final d = widget.dues;
       if (d == null) {
-        await g.addCustomer(name: name, phone: phone, creditLimit: l, address: address, note: note);
+        await g.addCustomer(name: name, phone: phone, creditLimit: l, address: address, note: note, gstin: gstin);
         ref.read(toastsProvider.notifier).show('${name.trim()} added');
       } else {
-        await g.updateCustomer(d.customerId, name: name, phone: phone, creditLimit: l, address: address, note: note);
+        await g.updateCustomer(d.customerId, name: name, phone: phone, creditLimit: l, address: address, note: note, gstin: gstin);
         ref.read(toastsProvider.notifier).show('${name.trim()} updated');
       }
       if (mounted) Navigator.of(context).pop();
@@ -692,6 +694,16 @@ class _CustomerEditDialogState extends ConsumerState<CustomerEditDialog> {
           onChanged: (v) => setState(() => phone = v),
         ),
         AppTextField(label: 'Address', hint: 'Optional', value: address, onChanged: (v) => setState(() => address = v)),
+        AppTextField(
+          fieldKey: const ValueKey('cedit-gstin'),
+          label: 'GSTIN',
+          hint: 'Optional — for B2B bills to a clinic or hospital',
+          value: gstin,
+          error: gstin.trim().isEmpty || isValidGstin(gstin) ? null : 'Check the 15 characters',
+          textCapitalization: TextCapitalization.characters,
+          inputFormatters: [FilteringTextInputFormatter.allow(RegExp('[0-9A-Za-z]')), LengthLimitingTextInputFormatter(15)],
+          onChanged: (v) => setState(() => gstin = v.toUpperCase()),
+        ),
         AppTextField(label: 'Note', hint: 'Optional — e.g. pays on the 1st', value: note, onChanged: (v) => setState(() => note = v)),
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,

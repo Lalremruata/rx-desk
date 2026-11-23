@@ -34,11 +34,11 @@ class CustomersRepository {
   /// For the bill panel: who this phone belongs to and their dues.
   Future<({Customer customer, int dues})?> creditInfoByPhone(String phone) => _dao.creditInfoByPhone(phone);
 
-  Future<int> addCustomer({required String name, required String phone, int? creditLimit, String address = '', String note = ''}) =>
-      _dao.addCustomer(name: name, phone: phone, creditLimit: creditLimit, address: address, note: note, at: _now());
+  Future<int> addCustomer({required String name, required String phone, int? creditLimit, String address = '', String note = '', String gstin = ''}) =>
+      _dao.addCustomer(name: name, phone: phone, creditLimit: creditLimit, address: address, note: note, gstin: gstin, at: _now());
 
-  Future<void> updateCustomer(int id, {required String name, required String phone, required int? creditLimit, String address = '', String note = ''}) =>
-      _dao.updateCustomer(id, name: name, phone: phone, creditLimit: creditLimit, address: address, note: note);
+  Future<void> updateCustomer(int id, {required String name, required String phone, required int? creditLimit, String address = '', String note = '', String gstin = ''}) =>
+      _dao.updateCustomer(id, name: name, phone: phone, creditLimit: creditLimit, address: address, note: note, gstin: gstin);
 
   Future<Customer> customer(int id) => _dao.customer(id);
 

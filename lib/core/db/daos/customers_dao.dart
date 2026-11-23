@@ -2,6 +2,7 @@ import 'package:drift/drift.dart';
 
 import '../../money/paise.dart';
 import '../../sales/credit_rules.dart';
+import '../../tax/gstin.dart';
 import '../../utils/expiry.dart';
 import '../app_database.dart';
 
@@ -40,7 +41,11 @@ class CustomerDues {
     required this.oldestOpen,
     required this.lastPayment,
     required this.hasOpening,
+    this.gstin = '',
   });
+
+  /// GSTIN for B2B bills ('' = none).
+  final String gstin;
 
   final int customerId;
   final String name;
@@ -400,8 +405,25 @@ class CustomersDao extends DatabaseAccessor<AppDatabase> with _$CustomersDaoMixi
   // Writes from the Customers screen — each one transaction.
 
   /// A new customer (phone must be unused).
-  Future<int> addCustomer({required String name, required String phone, int? creditLimit, String address = '', String note = '', required DateTime at}) {
+  /// '' → null; otherwise a valid GSTIN or [CustomerException].
+  static String? _checkGstin(String gstin) {
+    final g = normaliseGstin(gstin);
+    if (g.isEmpty) return null;
+    if (!isValidGstin(g)) throw const CustomerException('GSTIN looks wrong — check the 15 characters');
+    return g;
+  }
+
+  Future<int> addCustomer({
+    required String name,
+    required String phone,
+    int? creditLimit,
+    String address = '',
+    String note = '',
+    String gstin = '',
+    required DateTime at,
+  }) {
     return transaction(() async {
+      final g = _checkGstin(gstin);
       final n = name.trim();
       final ph = _cleanPhone(phone);
       if (n.isEmpty || n == walkInName) throw const CustomerException('Enter the customer’s name');
@@ -417,14 +439,24 @@ class CustomersDao extends DatabaseAccessor<AppDatabase> with _$CustomersDaoMixi
           creditLimitPaise: Value(creditLimit),
           address: Value(address.trim()),
           note: Value(note.trim()),
+          gstin: Value(g),
         ),
       );
     });
   }
 
   /// Edits a customer. [creditLimit] null = use the Settings default.
-  Future<void> updateCustomer(int id, {required String name, required String phone, required int? creditLimit, String address = '', String note = ''}) {
+  Future<void> updateCustomer(
+    int id, {
+    required String name,
+    required String phone,
+    required int? creditLimit,
+    String address = '',
+    String note = '',
+    String gstin = '',
+  }) {
     return transaction(() async {
+      final g = _checkGstin(gstin);
       await customer(id);
       final n = name.trim();
       final ph = _cleanPhone(phone);
@@ -440,6 +472,7 @@ class CustomersDao extends DatabaseAccessor<AppDatabase> with _$CustomersDaoMixi
           creditLimitPaise: Value(creditLimit),
           address: Value(address.trim()),
           note: Value(note.trim()),
+          gstin: Value(g),
         ),
       );
     });
@@ -539,7 +572,7 @@ class CustomersDao extends DatabaseAccessor<AppDatabase> with _$CustomersDaoMixi
   ''';
 
   static const String _cols = '''
-    c.id, c.name, COALESCE(c.phone, '') AS phone, c.address, c.note, c.credit_limit_paise,
+    c.id, c.name, COALESCE(c.phone, '') AS phone, c.address, c.note, c.credit_limit_paise, COALESCE(c.gstin, '') AS gstin,
     COALESCE(d.outstanding, 0) AS outstanding, COALESCE(d.advance, 0) AS advance,
     COALESCE(d.open_bills, 0) AS open_bills, d.oldest_open,
     (SELECT MAX(p.entry_date) FROM customer_ledger p
@@ -554,6 +587,7 @@ class CustomersDao extends DatabaseAccessor<AppDatabase> with _$CustomersDaoMixi
         phone: r.read<String>('phone'),
         address: r.read<String>('address'),
         note: r.read<String>('note'),
+        gstin: r.read<String>('gstin'),
         creditLimit: r.readNullable<int>('credit_limit_paise'),
         outstanding: Paise(r.read<int>('outstanding')),
         advance: Paise(r.read<int>('advance')),

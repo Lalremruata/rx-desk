@@ -6,6 +6,7 @@ import '../../money/paise.dart';
 import '../../sales/bill_rules.dart';
 import '../../sales/credit_rules.dart';
 import '../../sales/return_rules.dart';
+import '../../tax/gstin.dart';
 import '../../utils/expiry.dart';
 import '../app_database.dart';
 
@@ -25,7 +26,11 @@ class SaveBillRequest {
     this.paidNow = Paise.zero,
     this.paidNowMode = 'Cash',
     this.overrideCreditLimit = false,
+    this.buyerGstin = '',
   });
+
+  /// B2B bills (SPEC §4.15): the buyer's GSTIN ('' = B2C).
+  final String buyerGstin;
 
   final List<BillLineRequest> lines;
   final String customerName;
@@ -206,7 +211,14 @@ class SalesDao extends DatabaseAccessor<AppDatabase> with _$SalesDaoMixin {
       final doctor = (req.doctorName ?? '').trim();
       final phone = (req.customerPhone ?? '').trim();
       final name = req.customerName.trim().isEmpty ? walkInName : req.customerName.trim();
-      final customerId = phone.isEmpty ? null : await _customerFor(name, phone, ts);
+      final gstin = normaliseGstin(req.buyerGstin);
+      if (buyerGstinProblem(gstin, storeGstin: rules.storeGstin, gstRegistered: rules.gstRegistered) case final m?) {
+        throw BillException(BillError.invalidGstin, m);
+      }
+      if (gstin.isNotEmpty && req.customerName.trim().isEmpty) {
+        throw const BillException(BillError.invalidGstin, 'B2B bill — enter the buyer’s name');
+      }
+      final customerId = phone.isEmpty ? null : await _customerFor(name, phone, ts, gstin: gstin);
       if (credit) {
         // Inside the transaction, so two counters can't both slip under it.
         await attachedDatabase.customersDao.checkLimit(
@@ -248,6 +260,8 @@ class SalesDao extends DatabaseAccessor<AppDatabase> with _$SalesDaoMixin {
           note: Value(req.note),
           gstRegistered: Value(rules.gstRegistered),
           paidNowPaise: Value(credit ? req.paidNow.value : null),
+          buyerGstin: Value(gstin.isEmpty ? null : gstin),
+          placeOfSupply: Value(gstin.isEmpty ? null : gstinState(gstin)),
         ),
       );
 
@@ -414,15 +428,23 @@ class SalesDao extends DatabaseAccessor<AppDatabase> with _$SalesDaoMixin {
   Future<void> setSequence(String key, int lastSeq) =>
       into(invoiceSeq).insertOnConflictUpdate(InvoiceSeqCompanion.insert(fy: key, lastSeq: lastSeq));
 
-  Future<int> _customerFor(String name, String phone, int ts) async {
+  /// The customer with [phone] (made if new). A B2B [gstin] is remembered
+  /// on the customer for the next bill.
+  Future<int> _customerFor(String name, String phone, int ts, {String gstin = ''}) async {
     final c = await (select(customers)..where((x) => x.phone.equals(phone))).getSingleOrNull();
     if (c != null) {
-      if (name != 'Walk-in customer' && c.name != name) {
-        await (update(customers)..where((x) => x.id.equals(c.id))).write(CustomersCompanion(name: Value(name)));
+      final rename = name != 'Walk-in customer' && c.name != name;
+      final regst = gstin.isNotEmpty && c.gstin != gstin;
+      if (rename || regst) {
+        await (update(customers)..where((x) => x.id.equals(c.id))).write(
+          CustomersCompanion(name: rename ? Value(name) : const Value.absent(), gstin: regst ? Value(gstin) : const Value.absent()),
+        );
       }
       return c.id;
     }
-    return into(customers).insert(CustomersCompanion.insert(name: name, phone: Value(phone), createdAt: ts));
+    return into(customers).insert(
+      CustomersCompanion.insert(name: name, phone: Value(phone), createdAt: ts, gstin: Value(gstin.isEmpty ? null : gstin)),
+    );
   }
 
   Future<void> _bumpSummary(String day, int productId, {required int units, required int bills, required int net, required int tax}) =>
@@ -638,6 +660,8 @@ class SalesDao extends DatabaseAccessor<AppDatabase> with _$SalesDaoMixin {
           gstRegistered: Value(inv.gstRegistered),
           docType: const Value('credit_note'),
           refInvoiceId: Value(inv.id),
+          buyerGstin: Value(inv.buyerGstin),
+          placeOfSupply: Value(inv.placeOfSupply),
         ),
       );
 

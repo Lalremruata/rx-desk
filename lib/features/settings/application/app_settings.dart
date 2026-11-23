@@ -127,6 +127,9 @@ abstract class AppSettings with _$AppSettings {
     /// Locked on — MRP is tax-inclusive.
     @Default(true) bool mrpIncludesGst,
     @Default(true) bool roundOff,
+
+    /// Unit quantity code in the GSTR-1 HSN table (SPEC §4.15).
+    @Default('NOS') String gstUqc,
     @Default(15) int maxDiscountPct,
     @Default('Cash') String defaultPayment,
     @Default(true) bool requireDoctorForRx,
@@ -201,6 +204,7 @@ abstract class AppSettings with _$AppSettings {
         canGiveHighDiscount: roleHas(role, Permission.giveHighDiscount),
         canSellOnCredit: roleHas(role, Permission.sellOnCredit),
         defaultCreditLimit: defaultCreditLimitPaise,
+        storeGstin: gstin,
       );
 
   /// Settings + the signed-in role → rules for accepting a sales return.

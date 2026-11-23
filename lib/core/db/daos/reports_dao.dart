@@ -1,6 +1,7 @@
 import 'package:drift/drift.dart';
 
 import '../../money/paise.dart';
+import '../../tax/gstr1.dart';
 import '../../utils/expiry.dart';
 import '../app_database.dart';
 import '../report_models.dart';
@@ -406,5 +407,67 @@ class ReportsDao extends DatabaseAccessor<AppDatabase> with _$ReportsDaoMixin {
           daily: daily[r.read<int>('id')] ?? const {},
         ),
     ];
+  }
+
+  /// Every invoice and credit note dated [from]–[to] (cancelled included,
+  /// for the documents-issued table) and their lines, for GSTR-1 (SPEC §4.15).
+  Future<(List<Gstr1Doc>, List<Gstr1Item>)> gstr1Source(String from, String to) async {
+    final vars = [Variable.withString(from), Variable.withString(to)];
+    final docs = await customSelect(
+      '''
+      SELECT i.id, i.doc_type, i.number, i.seq, i.fy, i.sale_date, i.status, i.customer_name, i.total_paise,
+             i.buyer_gstin, i.place_of_supply, i.gst_registered, r.number AS ref_number, r.sale_date AS ref_date
+      FROM invoices i LEFT JOIN invoices r ON r.id = i.ref_invoice_id
+      WHERE i.sale_date BETWEEN ?1 AND ?2
+      ORDER BY i.sale_date, i.id
+      ''',
+      variables: vars,
+      readsFrom: {invoices},
+    ).get();
+    final items = await customSelect(
+      '''
+      SELECT it.invoice_id, it.hsn, it.product_name, it.qty, it.pack_size, it.gst_rate, it.taxable_paise, it.tax_paise, it.net_paise
+      FROM invoice_items it
+      WHERE it.sale_date BETWEEN ?1 AND ?2
+      ORDER BY it.invoice_id, it.line_no
+      ''',
+      variables: vars,
+      readsFrom: {invoiceItems},
+    ).get();
+    return (
+      [
+        for (final r in docs)
+          Gstr1Doc(
+            id: r.read<int>('id'),
+            docType: r.read<String>('doc_type'),
+            number: r.read<String>('number'),
+            seq: r.read<int>('seq'),
+            fy: r.read<String>('fy'),
+            saleDate: r.read<String>('sale_date'),
+            status: r.read<String>('status'),
+            customerName: r.read<String>('customer_name'),
+            totalPaise: r.read<int>('total_paise'),
+            buyerGstin: r.readNullable<String>('buyer_gstin'),
+            placeOfSupply: r.readNullable<String>('place_of_supply'),
+            refNumber: r.readNullable<String>('ref_number'),
+            refDate: r.readNullable<String>('ref_date'),
+            gstRegistered: r.read<bool>('gst_registered'),
+          ),
+      ],
+      [
+        for (final r in items)
+          Gstr1Item(
+            docId: r.read<int>('invoice_id'),
+            hsn: r.read<String>('hsn'),
+            description: r.read<String>('product_name'),
+            qty: r.read<int>('qty'),
+            packSize: r.read<int>('pack_size'),
+            gstRate: r.read<int>('gst_rate'),
+            taxablePaise: r.read<int>('taxable_paise'),
+            taxPaise: r.read<int>('tax_paise'),
+            netPaise: r.read<int>('net_paise'),
+          ),
+      ],
+    );
   }
 }

@@ -107,6 +107,24 @@ MRP the line shows the strip size, e.g. "per strip of 10".
   becomes **required** (red border), and the bill can't be saved without it. The Owner can turn
   this off in Settings › Billing & tax.
 
+### Bills to a clinic or hospital (B2B)
+
+When a business buys with its GSTIN (a clinic, nursing home or hospital), type its GSTIN in
+**Buyer GSTIN (B2B, optional)**, under Phone. The field only appears when the store is GST
+registered.
+
+- RxDesk checks the GSTIN as you type. When it is right, the field says *"B2B tax invoice ·
+  place of supply 15-Mizoram"*.
+- **Customer** must have the buyer's name.
+- **Same state only.** A GSTIN from another state is refused: *"This GSTIN is from … —
+  inter-state (IGST) bills aren't supported"*.
+- With a phone number, RxDesk remembers the GSTIN on that customer. Next time, a **Use …**
+  button under the field fills it in.
+- The printed bill shows *"GSTIN … · Place of supply …"* under **Billed to**, and the bill goes
+  into the B2B table of [GSTR-1](09-reports.md#gstr-1-month).
+
+![A B2B bill with the buyer's GSTIN checked](images/02-billing-b2b.png)
+
 ### Prescription medicines
 
 - **Schedule H / H1** medicines need the permission *Sell Schedule H / H1 medicines* (on for

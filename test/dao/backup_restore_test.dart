@@ -489,6 +489,36 @@ void main() {
     final c = await migrated.cashDao.closeDay(date: '2026-11-09', opening: const Paise(10000), counted: const Paise(8500), at: t0);
     expect(c.differencePaise, 0);
   });
+
+  test('migration v14 → v15: GSTIN columns; old bills stay B2C; a B2B bill saves', () async {
+    final v14Path = '${dir.path}/v14.sqlite';
+    final db = fileDb(v14Path);
+    final (p, b) = await addMed(db, qty: 10);
+    await db.salesDao.saveBill(SaveBillRequest(lines: [BillLineRequest(productId: p, batchId: b, qty: 1)]), rules: const BillRules(), at: t0);
+    await db.customStatement('ALTER TABLE customers DROP COLUMN gstin');
+    await db.customStatement('ALTER TABLE invoices DROP COLUMN buyer_gstin');
+    await db.customStatement('ALTER TABLE invoices DROP COLUMN place_of_supply');
+    await db.customStatement('PRAGMA user_version = 14');
+    await db.close();
+
+    final migrated = fileDb(v14Path);
+    addTearDown(migrated.close);
+    expect((await migrated.customSelect('PRAGMA user_version').getSingle()).read<int>('user_version'), latestSchemaVersion);
+    final old = (await migrated.select(migrated.invoices).get()).single;
+    expect((old.buyerGstin, old.placeOfSupply), (null, null));
+    final saved = await migrated.salesDao.saveBill(
+      SaveBillRequest(
+        lines: [BillLineRequest(productId: p, batchId: b, qty: 1)],
+        customerName: 'Hope Clinic',
+        customerPhone: '9800000001',
+        buyerGstin: '15AAACM1234A1ZD',
+      ),
+      rules: const BillRules(storeGstin: '15ABCDE1234F1Z5'),
+      at: t0,
+    );
+    expect((await migrated.salesDao.invoiceWithItems(saved.invoiceId))!.invoice.placeOfSupply, '15');
+    expect((await migrated.select(migrated.customers).getSingle()).gstin, '15AAACM1234A1ZD');
+  });
 }
 
 /// Turns a current database back into v7: stockist directory gone.

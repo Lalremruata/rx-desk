@@ -78,6 +78,9 @@ class Customers extends Table {
   IntColumn get creditLimitPaise => integer().nullable()();
   TextColumn get address => text().withDefault(const Constant(''))();
   TextColumn get note => text().withDefault(const Constant(''))();
+
+  /// v15: GSTIN of a business customer (clinic, hospital) for B2B bills.
+  TextColumn get gstin => text().nullable()();
 }
 
 class Doctors extends Table {
@@ -165,6 +168,11 @@ class Invoices extends Table {
   /// customer's total dues right after this bill — snapshots for printing.
   IntColumn get paidNowPaise => integer().nullable()();
   IntColumn get duesAfterPaise => integer().nullable()();
+
+  /// v15: B2B bills (SPEC §4.15) — the buyer's GSTIN and the place of
+  /// supply (state code) as billed. Null = B2C. Credit notes copy them.
+  TextColumn get buyerGstin => text().nullable()();
+  TextColumn get placeOfSupply => text().nullable()();
 }
 
 class InvoiceItems extends Table {

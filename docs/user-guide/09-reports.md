@@ -21,6 +21,7 @@ export for your accountant or GST filing. It opens on **This month**.
 | **Schedule H / H1 register** | Every H / H1 sale this month: date, bill no, patient, doctor, medicine, batch, qty |
 | **Maker-wise sales (FY)** | This financial year by manufacturer |
 | **Inventory Management Register (monthly)** | Opens the [consumption register](#inventory-management-register) |
+| **GSTR-1 (month)** | The month's outward supplies laid out for the GSTR-1 return (see [GSTR-1](#gstr-1-month)) |
 
 ### Choose the dates
 
@@ -69,6 +70,31 @@ HSN (last month)** and export it.
 > export or back up accordingly.
 
 ---
+
+## GSTR-1 (month)
+
+**Sales register › GSTR-1 (month)** builds the month's GSTR-1 tables from your bills and saves them as
+an Excel workbook for your accountant.
+
+1. It opens on **last month**. Use **‹** and **›** for another month.
+2. Check the totals:
+   - **B2B invoices (b2b)**: bills with a buyer GSTIN, per bill and GST rate.
+   - **B2C, net of returns (b2cs)**: all other bills per GST rate, less their returns.
+   - **Credit notes to registered buyers (cdnr)**: returns against B2B bills.
+   - **Net taxable value**: matches the Sales register's taxable value for the month.
+   - **HSN summary**, and the **documents issued** (first and last invoice and credit-note
+     numbers, how many, how many cancelled).
+3. Press **Export Excel**. The workbook has a summary sheet, then **b2b**, **b2cs**, **cdnr**,
+   **hsn(b2b)**, **hsn(b2c)** and **docs** sheets, with the GST offline tool's headings.
+
+- Quantities in the HSN sheets are in packs (strips, bottles), with the UQC from
+  **Settings › Billing & tax › UQC for GST returns** (NOS unless changed).
+- Cancelled bills are left out of the tables but counted in **docs**. Bills of supply (when the
+  store wasn't GST registered) are left out.
+- **Check the workbook with your accountant before filing.** The GST portal's templates change
+  from time to time.
+
+![GSTR-1 for October with the totals per table](images/09-gstr1.png)
 
 ## Inventory Management Register
 

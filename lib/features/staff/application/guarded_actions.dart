@@ -201,19 +201,27 @@ class GuardedActions {
     return _customers.recordPayment(customerId: customerId, date: date, payment: payment, pickedBillIds: pickedBillIds, staffId: _staffId);
   }
 
-  Future<int> addCustomer({required String name, required String phone, int? creditLimit, String address = '', String note = ''}) {
+  Future<int> addCustomer({required String name, required String phone, int? creditLimit, String address = '', String note = '', String gstin = ''}) {
     requirePermission(_ref, Permission.collectPayments);
     if (creditLimit != null) requirePermission(_ref, Permission.manageCustomerCredit);
-    return _customers.addCustomer(name: name, phone: phone, creditLimit: creditLimit, address: address, note: note);
+    return _customers.addCustomer(name: name, phone: phone, creditLimit: creditLimit, address: address, note: note, gstin: gstin);
   }
 
   /// Changing the limit needs manageCustomerCredit; other details need
   /// collectPayments.
-  Future<void> updateCustomer(int id, {required String name, required String phone, required int? creditLimit, String address = '', String note = ''}) async {
+  Future<void> updateCustomer(
+    int id, {
+    required String name,
+    required String phone,
+    required int? creditLimit,
+    String address = '',
+    String note = '',
+    String gstin = '',
+  }) async {
     requirePermission(_ref, Permission.collectPayments);
     final current = await _customers.customer(id);
     if (current.creditLimitPaise != creditLimit) requirePermission(_ref, Permission.manageCustomerCredit);
-    return _customers.updateCustomer(id, name: name, phone: phone, creditLimit: creditLimit, address: address, note: note);
+    return _customers.updateCustomer(id, name: name, phone: phone, creditLimit: creditLimit, address: address, note: note, gstin: gstin);
   }
 
   Future<int> setCustomerOpeningBalance({required int customerId, required String date, required Paise amount}) {

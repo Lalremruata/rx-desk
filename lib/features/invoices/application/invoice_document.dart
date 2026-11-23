@@ -2,6 +2,7 @@ import '../../../core/db/daos/sales_dao.dart';
 import '../../../core/money/gst.dart';
 import '../../../core/money/paise.dart';
 import '../../../core/sales/bill_rules.dart';
+import '../../../core/tax/gstin.dart';
 import '../../../core/utils/expiry.dart';
 import '../../../core/utils/pack.dart';
 import '../../settings/application/app_settings.dart';
@@ -31,6 +32,8 @@ class InvoiceData {
     this.againstDate,
     this.paidNow,
     this.duesAfter,
+    this.buyerGstin,
+    this.placeOfSupply,
   });
 
   /// Credit notes are stored negative; the document shows the refund as
@@ -49,6 +52,8 @@ class InvoiceData {
       doctorName: i.doctorName,
       paymentMode: i.paymentMode,
       gstRegistered: i.gstRegistered,
+      buyerGstin: i.buyerGstin,
+      placeOfSupply: i.placeOfSupply,
       subtotal: m(i.subtotalPaise),
       discount: m(i.discountPaise),
       taxable: m(i.taxablePaise),
@@ -108,6 +113,10 @@ class InvoiceData {
   /// total dues right after the bill (snapshots).
   final Paise? paidNow;
   final Paise? duesAfter;
+
+  /// B2B bills (SPEC §4.15): the buyer's GSTIN and place of supply code.
+  final String? buyerGstin;
+  final String? placeOfSupply;
   final DateTime? againstDate;
 }
 
@@ -345,7 +354,7 @@ InvoiceDoc buildInvoiceDoc(InvoiceData d, AppSettings s, {InvoicePaper? paperOve
     dateText: formatDate(d.createdAt),
     timeText: formatTime(d.createdAt),
     customer: d.customerName,
-    phone: (d.customerPhone ?? '').isEmpty ? '—' : d.customerPhone!,
+    phone: _billedToSub(d),
     doctor: s.showDoctor && doctor.isNotEmpty ? doctor : null,
     payment: d.paymentMode == creditMode ? (d.isCreditNote ? 'Adjusted in dues' : 'Credit') : d.paymentMode,
     paymentSub: creditPaymentLine(d),
@@ -429,4 +438,14 @@ InvoiceData sampleInvoice({required String number, required DateTime at, require
     total: t.total,
     items: items,
   );
+}
+
+/// Under "Billed to": the phone, and for a B2B bill the buyer's GSTIN and
+/// the place of supply (SPEC §4.15).
+String _billedToSub(InvoiceData d) {
+  final phone = (d.customerPhone ?? '').isEmpty ? '—' : d.customerPhone!;
+  final g = d.buyerGstin;
+  if (g == null || g.isEmpty) return phone;
+  final b2b = 'GSTIN $g · Place of supply ${placeOfSupplyLabel(d.placeOfSupply ?? gstinState(g))}';
+  return phone == '—' ? b2b : '$phone\n$b2b';
 }

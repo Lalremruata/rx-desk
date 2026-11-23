@@ -337,5 +337,11 @@ try {
   const exited = new Promise((ok) => proc.once('exit', ok));
   proc.kill();
   await exited;
-  rmSync(profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+  // Chrome's helper processes can outlive it for a moment; the profile is a
+  // temp folder, so cleaning up is best effort.
+  try {
+    rmSync(profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+  } catch {
+    /* left in the OS temp folder */
+  }
 }

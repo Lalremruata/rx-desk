@@ -48,6 +48,21 @@ class BillingTab extends ConsumerWidget {
               value: (x) => x.roundOff,
               onChanged: (x, v) => x.copyWith(roundOff: v),
             ),
+            SettingRow(
+              label: 'UQC for GST returns',
+              help: 'Unit code in the GSTR-1 HSN table (NOS, BOX, BTL, STR…). Ask your CA.',
+              child: SizedBox(
+                width: 140,
+                child: AppTextField(
+                  key: const ValueKey('setting-uqc'),
+                  label: 'UQC',
+                  value: s.gstUqc,
+                  textCapitalization: TextCapitalization.characters,
+                  inputFormatters: [FilteringTextInputFormatter.allow(RegExp('[A-Za-z]')), LengthLimitingTextInputFormatter(3)],
+                  onChanged: (v) => editSettings(ref, (x) => x.copyWith(gstUqc: v.toUpperCase())),
+                ),
+              ),
+            ),
           ],
         ),
         const SizedBox(height: AppSpace.lg),

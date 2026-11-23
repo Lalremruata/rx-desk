@@ -19,9 +19,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:rx_desk/core/db/app_database.dart';
 import 'package:rx_desk/core/db/daos/dues_dao.dart';
 import 'package:rx_desk/core/db/daos/purchases_dao.dart';
+import 'package:rx_desk/core/db/daos/sales_dao.dart';
 import 'package:rx_desk/core/db/models.dart';
 import 'package:rx_desk/core/db/seed/seed.dart';
 import 'package:rx_desk/core/money/paise.dart';
+import 'package:rx_desk/core/sales/bill_rules.dart';
+import 'package:rx_desk/core/sales/return_rules.dart';
 import 'package:rx_desk/features/settings/application/app_settings.dart';
 import 'package:rx_desk/features/shell/presentation/app_shell.dart';
 import 'package:rx_desk/features/staff/application/session.dart';
@@ -237,6 +240,28 @@ Future<void> _extras(AppDatabase db) async {
   );
 }
 
+// B2B (SPEC §4.15): a clinic billed in October, with one return.
+Future<void> _b2bExtras(AppDatabase db) async {
+  final at = DateTime(2026, 10, 20, 11);
+  final batch = (await db.catalogDao.batchesOf(3)).firstWhere((b) => b.qty > 20 && b.expiry.compareTo('2027-06') > 0);
+  final saved = await db.salesDao.saveBill(
+    SaveBillRequest(
+      lines: [BillLineRequest(productId: 3, batchId: batch.id, qty: 20)],
+      customerName: 'Hope Clinic',
+      customerPhone: '9612000111',
+      buyerGstin: '15AAACM1234A1ZD',
+    ),
+    rules: BillRules(storeGstin: _settings.gstin, numbering: _settings.numbering),
+    at: at,
+  );
+  final item = (await db.salesDao.invoiceWithItems(saved.invoiceId))!.items.single;
+  await db.salesDao.saveCreditNote(
+    SaveCreditNoteRequest(invoiceId: saved.invoiceId, lines: [ReturnLineRequest(itemId: item.id, qty: 2)], refundMode: 'Cash'),
+    rules: const ReturnRules(),
+    at: DateTime(2026, 10, 24, 17),
+  );
+}
+
 // Day close (SPEC §4.14): yesterday closed with ₹2,000 left in the drawer;
 // two paid-outs today.
 Future<void> _cashExtras(AppDatabase db) async {
@@ -265,6 +290,7 @@ void main() {
       await seedDemoData(db, now: testNow);
       await _extras(db);
       await _cashExtras(db);
+      await _b2bExtras(db);
       await db.close();
     }
   });
@@ -344,6 +370,17 @@ void main() {
     await _addToBill(tester, 'ambroxol');
     await _tap(tester, find.byKey(const ValueKey('held-bills')));
     await _shot(tester, '02-billing-held');
+  });
+
+  testWidgets('02-billing-b2b', (tester) async {
+    await _open(tester, '/billing');
+    await _addToBill(tester, 'cetirizine 10');
+    await _addToBill(tester, 'paracetamol 650');
+    await _type(tester, 'bill-customer', 'Hope Clinic');
+    await _type(tester, 'bill-phone', '9612000111');
+    await _type(tester, 'bill-gstin-field', '15AAACM1234A1ZD');
+    await _reveal(tester, find.text('Bill details'));
+    await _shot(tester, '02-billing-b2b');
   });
 
   // 3 · Dashboard
@@ -505,6 +542,13 @@ void main() {
   testWidgets('08-sales-register', (tester) async {
     await _open(tester, '/register');
     await _shot(tester, '08-sales-register');
+  });
+
+  testWidgets('09-gstr1', (tester) async {
+    await _open(tester, '/register');
+    await _tap(tester, find.byKey(const ValueKey('saved-gstr1')));
+    await _run(tester, 800);
+    await _shot(tester, '09-gstr1');
   });
 
   testWidgets('08-consumption', (tester) async {

@@ -49,6 +49,7 @@ class HeldBillData {
     this.customer = '',
     this.phone = '',
     this.doctor = '',
+    this.buyerGstin = '',
     this.discountPct = 0,
     this.discountCustom = false,
     this.discountKind = 'percent',
@@ -62,6 +63,7 @@ class HeldBillData {
   final String customer;
   final String phone;
   final String doctor;
+  final String buyerGstin;
   final int discountPct;
   final bool discountCustom;
 
@@ -80,6 +82,7 @@ class HeldBillData {
         'customer': customer,
         'phone': phone,
         'doctor': doctor,
+        'buyerGstin': buyerGstin,
         'discountPct': discountPct,
         'discountCustom': discountCustom,
         'discountKind': discountKind,
@@ -96,6 +99,7 @@ class HeldBillData {
       customer: j['customer'] as String? ?? '',
       phone: j['phone'] as String? ?? '',
       doctor: j['doctor'] as String? ?? '',
+      buyerGstin: j['buyerGstin'] as String? ?? '',
       discountPct: j['discountPct'] as int? ?? 0,
       discountCustom: j['discountCustom'] as bool? ?? false,
       discountKind: j['discountKind'] as String? ?? 'percent',

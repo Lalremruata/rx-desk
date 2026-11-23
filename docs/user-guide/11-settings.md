@@ -91,6 +91,7 @@ These settings apply to new bills only.
 | **GST registered** | On | Off: bills print as **Bill of supply**, without a GST breakup |
 | **MRP includes GST** | On (locked) | Medicine MRP always includes tax, so tax is worked out from it |
 | **Round total to the nearest rupee** | On | Adds a round-off line to the bill |
+| **UQC for GST returns** | NOS | The unit code in the GSTR-1 HSN sheets (NOS, BOX, BTL, STR…). Ask your accountant. |
 
 ![Settings › Billing & tax](images/10-settings-billing.png)
 

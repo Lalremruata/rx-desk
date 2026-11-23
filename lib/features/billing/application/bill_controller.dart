@@ -287,6 +287,7 @@ class BillController extends _$BillController {
   void setCustomer(String v) => state = state.copyWith(customer: v);
   void setPhone(String v) => state = state.copyWith(phone: v);
   void setDoctor(String v) => state = state.copyWith(doctor: v);
+  void setBuyerGstin(String v) => state = state.copyWith(buyerGstin: v.toUpperCase().trim());
 
   /// A discount chip (whole %). Leaves manual entry.
   void setDiscount(int pct) {
@@ -357,6 +358,7 @@ class BillController extends _$BillController {
       customer: state.customer,
       phone: state.phone,
       doctor: state.doctor,
+      buyerGstin: state.buyerGstin,
       discountPct: state.discountPct,
       discountCustom: state.discountCustom,
       discountKind: state.discountKind.name,
@@ -457,6 +459,7 @@ class BillController extends _$BillController {
       customer: data.customer,
       phone: data.phone,
       doctor: data.doctor,
+      buyerGstin: data.buyerGstin,
       discountPct: data.discountPct,
       discountCustom: data.discountCustom,
       discountKind: data.discountKind == DiscountKind.flat.name ? DiscountKind.flat : DiscountKind.percent,
@@ -532,6 +535,7 @@ class BillController extends _$BillController {
           paidNow: state.paidNowPaise,
           paidNowMode: state.paidNowMode,
           overrideCreditLimit: overrideCreditLimit,
+          buyerGstin: state.buyerGstin,
         ),
         s.billRules(role: user?.role ?? StaffRole.owner),
       );

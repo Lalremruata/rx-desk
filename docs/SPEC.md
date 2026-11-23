@@ -38,9 +38,11 @@ A pharmacist or cashier at the counter must be able to:
 15. Park a bill and serve the next customer, then recall it (§5.2).
 16. Close the day: know the cash that should be in the drawer, record paid-outs, count it and
     keep the difference (§4.14, §5.11).
+17. Bill a clinic or hospital with its GSTIN (B2B, same state) and hand the accountant a
+    GSTR-1-ready workbook for any month (§4.15).
 
-Out of scope for v1: online sync, e-invoicing / IRN, sending orders to suppliers
-electronically, purchase GST input-credit reports, interest on late payment,
+Out of scope for v1: online sync, e-invoicing / IRN, inter-state (IGST) bills, filing returns
+online, sending orders to suppliers electronically, purchase GST input-credit reports, interest on late payment,
 loyalty points, multi-store. Keep the schema open for them (nullable FKs,
 `store_id` not needed yet).
 
@@ -196,6 +198,10 @@ product_sources    id PK, supplier_id FK, product_id FK NULL (NULL = name not in
 
 -- v9: editable inventory (§4.13)
 stock_movements    + note TEXT DEFAULT '' ("Damaged: 2 strips crushed")
+
+-- v15: B2B bills (§4.15)
+customers          + gstin TEXT NULL
+invoices           + buyer_gstin TEXT NULL, + place_of_supply TEXT NULL (state code; NULL = B2C)
 
 -- v14: day-end cash closing (§4.14)
 cash_paid_out      id PK, entry_date TEXT, amount_paise INT, note TEXT ("Tea"),
@@ -586,6 +592,31 @@ All of these need `changeStock` and run in one transaction each.
   payment), the day shows "Changed since closing — close again".
 - Permission `cashClose` (Pharmacist ✓, Cashier ✓) covers paid-outs and closing.
 
+### 4.15 B2B bills and GSTR-1
+
+- **Buyer GSTIN** (optional, GST-registered stores only) makes a bill B2B. It must be a valid
+  GSTIN (15 characters, known state code, GSTN mod-36 check character), the buyer's name is
+  required, and the store's own GSTIN must be set. **Same state only**: a GSTIN from another
+  state is refused ("This GSTIN is from … — inter-state (IGST) bills aren't supported"); all
+  bills stay CGST + SGST. The bill stores `buyer_gstin` and `place_of_supply` (the state code);
+  with a phone the GSTIN is remembered on the customer (also editable in Customers). Credit
+  notes copy both from their bill. The invoice prints "GSTIN … · Place of supply 15-Mizoram"
+  under Billed to.
+- **GSTR-1 (month)** (Sales register saved report): built from invoice snapshots for the month
+  (by `sale_date`), bills of supply excluded, cancelled bills excluded from the tables but counted
+  in *docs*:
+  - **b2b** — one row per B2B invoice × GST rate (taxable value, invoice value, place of supply).
+  - **b2cs** — per rate, type OE, place of supply = the store's state, **net of B2C credit notes**.
+  - **cdnr** — credit notes against B2B bills, per note × rate (positive values).
+  - **hsn(b2b)** / **hsn(b2c)** — per HSN × rate: quantity in packs (units ÷ units per pack, two
+    decimals), UQC (setting `gstUqc`, default NOS), total value, taxable, CGST, SGST (per line,
+    odd paisa on SGST, as on the bills); credit notes subtract.
+  - **docs** — invoices and credit notes issued: first and last number, count, cancelled.
+  - Net taxable (b2b + b2cs − cdnr) equals the HSN taxable and the Sales register's taxable for
+    the month. A summary sheet shows the totals.
+- Headings follow the GST offline tool's Excel template; confirm them against the current
+  template with a CA before filing (§12).
+
 ## 5. Screens
 
 Copy, layout and states follow the prototype. Highlights:
@@ -622,7 +653,8 @@ Layout: left 3/5 (search, quick add, bill grid, shortcut hints), right 2/5 "Bill
 - **Bill grid** columns: # · Item (name, Rx badge, salt · maker) · Batch · Exp (amber when
   ≤ window) · Qty (number field, 1…batch qty) · MRP · Amount · delete. New rows slide in;
   the row just added flashes amber for 1.4 s. Empty state: "Bill is empty".
-- **Bill details**: customer name (F4 focuses), phone, doctor (becomes required with Rx items),
+- **Bill details**: customer name (F4 focuses), phone, buyer GSTIN (B2B, GST-registered stores; checked as typed;
+  "Use …" fills a known customer's GSTIN; §4.15), doctor (becomes required with Rx items),
   discount chips + Custom (% / ₹ field, §4.6), totals card (items/units, subtotal, discount, taxable, CGST+SGST incl.,
   net payable 26 px), payment mode (Cash / UPI / Card, F8 cycles), primary
   "Save & print invoice  F10".
@@ -689,7 +721,9 @@ Layout: left 3/5 (search, quick add, bill grid, shortcut hints), right 2/5 "Bill
 One row per item sold. Defaults to **This month**.
 
 - Saved reports (one click): Daily sales · Top sellers this month · GST summary by HSN
-  (last month) · Schedule H / H1 register · Maker-wise sales (FY).
+  (last month) · Schedule H / H1 register · Maker-wise sales (FY) · Inventory Management
+  Register · **GSTR-1 (month)** (dialog: ‹ month › starting on last month, table totals, documents
+  issued, Export Excel — §4.15).
 - Date presets: Today, Yesterday, Last 7 days, This month, Last month, This FY, Custom (from/to).
 - Filters: search (medicine, salt, batch, bill no, customer), maker, category, schedule
   (All, H+H1, H, H1, Non-Rx), payment, doctor. "Clear filters".
@@ -829,7 +863,8 @@ that produces a `pw.Document` (PDF). The on-screen preview renders the same PDF 
 
 Header: logo / initials tile (accent) · store name · address (line1, line2, city, state – PIN) ·
 "Ph …, email" · "GSTIN … · DL 20B … · 21B …"; right: "TAX INVOICE" / "BILL OF SUPPLY",
-number, date · time. Info strip: Billed to · Prescribed by (if enabled and present) · Payment.
+number, date · time. Info strip: Billed to (+ "GSTIN … · Place of supply …" on B2B bills, §4.15) ·
+Prescribed by (if enabled and present) · Payment.
 
 Item table columns, by setting and paper:
 
@@ -875,7 +910,7 @@ Get well soon.") · `signatureLabel` "Registered Pharmacist".
 `defaultPayment` Cash · `requireDoctorForRx` true · `blockExpired` true (locked) ·
 `allowNegativeStock` false · `creditNotePrefix` "CN" (A–Z0–9, ≤ 8, required, ≠ `prefix`) ·
 `returnWindowDays` 7|15|30|90|0 (30; 0 = no limit) · `defaultCreditLimitPaise` (0 = no limit;
-typed in whole rupees).
+typed in whole rupees) · `gstUqc` "NOS" (GSTR-1 HSN unit code, 3 letters).
 
 ### 7.4 Inventory
 `expiryWindowMonths` 1|2|3|6 (3) · `deadStockDays` 60|90|180 (90) · `defaultReorderLevel` 20 ·
@@ -982,6 +1017,7 @@ connection.
 ## 12. Legal / compliance notes (verify before release)
 
 Not legal advice — confirm with a CA / the State Drugs Control office:
-GST tax-invoice mandatory fields; HSN digits required for your turnover; Schedule H/H1 register
+GST tax-invoice mandatory fields; HSN digits required for your turnover; the GSTR-1 workbook's
+sheet and column layout against the current GST offline tool (HSN B2B / B2C split, UQC); Schedule H/H1 register
 fields and retention; drug licence numbers on bills; pharmacist details. Keep these
 configurable rather than hardcoded.

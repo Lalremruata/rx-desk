@@ -7,7 +7,7 @@ import 'fts.dart';
 
 /// Current schema version. Every bump needs a step in [_steps] and a test in
 /// test/dao/migration_test.dart (CLAUDE.md rule 10).
-const int latestSchemaVersion = 14;
+const int latestSchemaVersion = 15;
 
 /// `_steps[v]` migrates schema v → v + 1.
 final Map<int, Future<void> Function(AppDatabase db, Migrator m)> _steps = {
@@ -141,6 +141,13 @@ final Map<int, Future<void> Function(AppDatabase db, Migrator m)> _steps = {
       'Pharmacist': ['cashClose'],
       'Cashier': ['cashClose'],
     });
+  },
+  // v14 → v15: B2B bills (SPEC §4.15) — customer GSTIN, buyer GSTIN and
+  // place of supply on invoices. Existing bills stay B2C (null).
+  14: (db, m) async {
+    if (!await _hasColumn(db, 'customers', 'gstin')) await m.addColumn(db.customers, db.customers.gstin);
+    if (!await _hasColumn(db, 'invoices', 'buyer_gstin')) await m.addColumn(db.invoices, db.invoices.buyerGstin);
+    if (!await _hasColumn(db, 'invoices', 'place_of_supply')) await m.addColumn(db.invoices, db.invoices.placeOfSupply);
   },
 };
 

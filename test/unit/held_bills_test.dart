@@ -24,6 +24,7 @@ void main() {
         customer: 'Mawii',
         phone: '9800000000',
         doctor: 'Dr. R. Lalthangliana',
+        buyerGstin: '15AAACM1234A1ZD',
         discountCustom: true,
         discountKind: 'flat',
         discountInput: '12.50',
@@ -32,6 +33,7 @@ void main() {
         paidNowMode: 'UPI',
       );
       final r = HeldBillData.decode(d.encode());
+      expect(r.buyerGstin, '15AAACM1234A1ZD');
       final l = r.lines.single;
       expect((l.productId, l.batchId, l.qty, l.loose, l.mrpPaise, l.gstRate), (3, 7, 12, true, 2500, 12));
       expect(
