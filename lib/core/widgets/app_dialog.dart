@@ -119,12 +119,14 @@ class AppDialogPanel extends StatelessWidget {
       namesRoute: true,
       explicitChildNodes: true,
       label: semanticLabel,
-      child: Material(
-        color: AppColors.surface,
-        shape: const RoundedRectangleBorder(borderRadius: AppRadius.panelAll),
-        shadowColor: AppColors.transparent,
-        child: DecoratedBox(
-          decoration: const BoxDecoration(borderRadius: AppRadius.panelAll, boxShadow: [AppShadows.dialog]),
+      // The shadow sits behind the Material: inside it, a box with no colour
+      // would show its own shadow through the panel as a grey veil.
+      child: DecoratedBox(
+        decoration: const BoxDecoration(borderRadius: AppRadius.panelAll, boxShadow: [AppShadows.dialog]),
+        child: Material(
+          color: AppColors.surface,
+          shape: const RoundedRectangleBorder(borderRadius: AppRadius.panelAll),
+          shadowColor: AppColors.transparent,
           child: Padding(
             padding: const EdgeInsets.all(24),
             child: Column(

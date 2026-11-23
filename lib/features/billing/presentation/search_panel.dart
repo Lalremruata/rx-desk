@@ -179,14 +179,16 @@ class _Dropdown extends ConsumerWidget {
         opacity: t,
         child: Transform.translate(offset: Offset(0, AppMotion.dropdownDy * (1 - t)), child: child),
       ),
-      child: Material(
-        color: AppColors.surface,
-        shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.all(Radius.circular(14)),
-          side: BorderSide(color: AppColors.border),
-        ),
-        child: DecoratedBox(
-          decoration: const BoxDecoration(borderRadius: BorderRadius.all(Radius.circular(14)), boxShadow: [AppShadows.dropdown]),
+      // Shadow behind the Material, not inside it (it would show through the
+      // transparent rows as a grey veil).
+      child: DecoratedBox(
+        decoration: const BoxDecoration(borderRadius: BorderRadius.all(Radius.circular(14)), boxShadow: [AppShadows.dropdown]),
+        child: Material(
+          color: AppColors.surface,
+          shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.all(Radius.circular(14)),
+            side: BorderSide(color: AppColors.border),
+          ),
           child: ClipRRect(
             borderRadius: const BorderRadius.all(Radius.circular(14)),
             child: ConstrainedBox(constraints: const BoxConstraints(maxHeight: 460), child: body),
