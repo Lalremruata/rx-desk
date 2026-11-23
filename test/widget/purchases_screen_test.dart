@@ -141,4 +141,73 @@ void main() {
     final row = (await tester.runAsync(() => c.read(appDatabaseProvider).purchasesDao.orderRows([1])))!.single;
     expect(row.productId, 2);
   });
+
+  testWidgets('free-text "10 Box": strips per box is asked, multiplies into stock and is remembered; add-from-receive has no opening stock', (tester) async {
+    final c = await pumpApp(
+      tester,
+      size: tabletPortrait,
+      location: '/purchases',
+      setUpDb: (db) async {
+        await _seed(db);
+        await db.purchasesDao.addOrderLines('2026-11-09', [
+          const NewOrderLine(itemName: 'Paracetamol', qty: 10, unit: 'Box'),
+          const NewOrderLine(itemName: 'Paracetamol', qty: 2, unit: 'Box'),
+        ], at: t0);
+      },
+    );
+    String field(String key) => tester.widget<TextField>(find.byKey(ValueKey(key))).controller!.text;
+    await _run(tester);
+    await tester.ensureVisible(find.byKey(const ValueKey('receive-line-1')));
+    await _run(tester, 100);
+    await tester.tap(find.byKey(const ValueKey('receive-line-1')));
+    await _run(tester);
+
+    // Adding a new medicine from a receipt: no opening stock (the receipt adds it).
+    await _type(tester, 'recv-link-0', 'Crocin');
+    await _run(tester, 300);
+    await tester.tap(find.byKey(const ValueKey('pick-add-medicine')));
+    await _run(tester);
+    expect(find.byKey(const ValueKey('add-perbox')), findsOneWidget);
+    expect(find.byKey(const ValueKey('add-qty')), findsNothing);
+    expect(find.byKey(const ValueKey('add-batch')), findsNothing);
+    await tester.tap(find.byTooltip('Close').last);
+    await _run(tester);
+
+    await _type(tester, 'recv-link-0', 'para');
+    await _run(tester, 300);
+    await tester.tap(find.byKey(const ValueKey('pick-1')));
+    await _run(tester, 100);
+    expect(find.byKey(const ValueKey('recv-perbox-0')), findsOneWidget);
+    expect(field('recv-units-0'), '');
+    await _type(tester, 'recv-supplier', 'FMT Pharmacy');
+    await _type(tester, 'recv-invoice', 'FP/501/26-27');
+    await _type(tester, 'recv-batch-0', 'PCM2611');
+    await tester.ensureVisible(find.byKey(const ValueKey('recv-save-invoice')));
+    await tester.tap(find.byKey(const ValueKey('recv-save-invoice')));
+    await _run(tester);
+    expect(_toasts(c).last, 'Check the highlighted fields');
+    expect(find.text('How many strips in a box?'), findsOneWidget);
+
+    await _type(tester, 'recv-perbox-0', '15');
+    expect(field('recv-units-0'), '150');
+    expect(find.byKey(const ValueKey('recv-boxmaths-0')), findsOneWidget);
+    await tester.ensureVisible(find.byKey(const ValueKey('recv-save-invoice')));
+    await tester.tap(find.byKey(const ValueKey('recv-save-invoice')));
+    await _run(tester);
+    expect(_toasts(c).last, startsWith('Invoice FP/501/26-27 saved'));
+    final db = c.read(appDatabaseProvider);
+    final p = (await tester.runAsync(() => db.catalogDao.stockRow(1, now: t0)))!;
+    expect((p.saleable, p.packsPerBox), (250, 15));
+
+    // Next Box receipt for the same medicine: prefilled from the medicine.
+    await tester.ensureVisible(find.byKey(const ValueKey('receive-line-2')));
+    await _run(tester, 100);
+    await tester.tap(find.byKey(const ValueKey('receive-line-2')));
+    await _run(tester);
+    await _type(tester, 'recv-link-0', 'para');
+    await _run(tester, 300);
+    await tester.tap(find.byKey(const ValueKey('pick-1')));
+    await _run(tester, 100);
+    expect((field('recv-perbox-0'), field('recv-units-0')), ('15', '30'));
+  });
 }

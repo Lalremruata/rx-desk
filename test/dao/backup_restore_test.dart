@@ -380,6 +380,32 @@ void main() {
     );
     expect((await migrated.salesDao.invoiceWithItems(saved.invoiceId))!.invoice.discountFlatPaise, 500);
   });
+
+  test('migration v10 → v11: products get packs_per_box; old medicines start unknown; a Box receipt remembers it', () async {
+    final v10Path = '${dir.path}/v10.sqlite';
+    final db = fileDb(v10Path);
+    final (p, b) = await addMed(db, qty: 0);
+    await db.customStatement('ALTER TABLE products DROP COLUMN packs_per_box');
+    await db.customStatement('PRAGMA user_version = 10');
+    await db.close();
+
+    final migrated = fileDb(v10Path);
+    addTearDown(migrated.close);
+    expect((await migrated.customSelect('PRAGMA user_version').getSingle()).read<int>('user_version'), latestSchemaVersion);
+    expect((await migrated.catalogDao.stockRow(p, now: t0))!.packsPerBox, isNull);
+    await migrated.purchasesDao.receive(
+      ReceiveRequest(
+        supplierName: 'Life Drugs Centre',
+        invoiceNo: 'INV1',
+        receivedDate: '2026-09-02',
+        lines: [ReceiveLineInput(productId: p, batchNo: 'PCM2611', qty: 10, unit: 'Box', stockUnits: 150, amount: Paise.zero, packsPerBox: 15)],
+      ),
+      at: t0,
+      now: t0,
+    );
+    expect((await migrated.catalogDao.stockRow(p, now: t0))!.packsPerBox, 15);
+    expect(await qtyOf(migrated, b), 150);
+  });
 }
 
 /// Turns a current database back into v7: stockist directory gone.

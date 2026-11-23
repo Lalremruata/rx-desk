@@ -6,6 +6,7 @@ import 'package:rx_desk/core/db/models.dart';
 import 'package:rx_desk/core/inventory/stock_adjust.dart';
 import 'package:rx_desk/core/money/paise.dart';
 import 'package:rx_desk/core/sales/bill_rules.dart';
+import 'package:rx_desk/core/utils/pack.dart';
 
 import '../helpers/test_db.dart';
 
@@ -15,7 +16,7 @@ void main() {
   setUp(() => db = memoryDb());
   tearDown(() => db.close());
 
-  ProductEdit edit(StockRow r, {String? name, String? barcode, int? mrp, int? gst, String? maker}) => ProductEdit(
+  ProductEdit edit(StockRow r, {String? name, String? barcode, int? mrp, int? gst, String? maker, int? perBox}) => ProductEdit(
         name: name ?? r.name,
         salt: r.salt,
         maker: maker ?? r.maker,
@@ -28,6 +29,7 @@ void main() {
         mrp: Paise(mrp ?? r.mrp.value),
         reorderLevel: r.reorderLevel,
         rack: r.rack,
+        packsPerBox: perBox ?? r.packsPerBox,
       );
 
   Future<StockRow> row(int pid) async => (await db.catalogDao.stockRow(pid, now: t0))!;
@@ -49,6 +51,23 @@ void main() {
 
       final item = await (db.select(db.invoiceItems)..where((i) => i.invoiceId.equals(sale.invoiceId))).getSingle();
       expect((item.productName, item.mrpPaise, item.gstRate), ('Paracetamol 650 mg Tablet', 3090, 12));
+    });
+
+    test('strips per box: set on add, corrected on edit, 1–$maxPacksPerBox', () async {
+      final pid = await db.catalogDao.addProduct(
+        const NewProduct(name: 'Dolo 650', maker: 'Micro Labs', category: 'Tablet', gstRate: 12, mrp: Paise(3360), packsPerBox: 15),
+        at: t0,
+      );
+      expect((await row(pid)).packsPerBox, 15);
+      await db.catalogDao.updateProduct(pid, edit(await row(pid), perBox: 10), at: t0);
+      expect((await row(pid)).packsPerBox, 10);
+      await db.catalogDao.updateProduct(pid, edit(await row(pid), name: 'Dolo 650 Tab'), at: t0);
+      expect((await row(pid)).packsPerBox, 10);
+      await expectLater(db.catalogDao.updateProduct(pid, edit(await row(pid), perBox: 0), at: t0), throwsA(isA<CatalogException>()));
+      await expectLater(
+        db.catalogDao.addProduct(const NewProduct(name: 'X', maker: 'Y', category: 'Tablet', gstRate: 12, mrp: Paise(100), packsPerBox: maxPacksPerBox + 1), at: t0),
+        throwsA(isA<CatalogException>()),
+      );
     });
 
     test('barcode: own barcode is fine, another product’s is refused', () async {

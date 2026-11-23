@@ -3,6 +3,7 @@ import 'package:rx_desk/core/db/app_database.dart';
 import 'package:rx_desk/core/db/daos/purchases_dao.dart';
 import 'package:rx_desk/core/money/paise.dart';
 import 'package:rx_desk/core/purchases/purchase_rules.dart';
+import 'package:rx_desk/core/utils/pack.dart';
 
 import '../helpers/test_db.dart';
 
@@ -155,6 +156,50 @@ void main() {
       receive([ReceiveLineInput(orderLineId: ids[1], productId: pid, batchNo: 'PCM2611', qty: 1, unit: 'Box', stockUnits: 1, amount: Paise.zero)], inv: 'X2'),
       throwsA(isA<PurchaseException>()),
     );
+  });
+
+  test('a Box line remembers strips per box on the medicine, in the same transaction', () async {
+    final (pid, bid) = await addMed(db, name: 'Dolo 650 Tablet', qty: 0);
+    Future<int?> perBox() async => (await db.catalogDao.stockRow(pid, now: t0))!.packsPerBox;
+    expect(await perBox(), isNull);
+
+    // Free text "Dolo 10 Box" linked on receipt: 10 × 15 = 150 strips.
+    final ids = await dao.addOrderLines(day, [const NewOrderLine(itemName: 'Dolo', qty: 10, unit: 'Box')], at: t0);
+    await receive([
+      ReceiveLineInput(orderLineId: ids[0], productId: pid, batchNo: 'PCM2611', qty: 10, unit: 'Box', stockUnits: 150, amount: const Paise(150000), packsPerBox: 15),
+    ]);
+    expect(await qtyOf(db, bid), 150);
+    expect(await perBox(), 15);
+    expect((await rowOf(ids[0])).status, OrderStatus.received);
+
+    // A Strip line leaves it alone; a later Box line can change it.
+    await receive([ReceiveLineInput(productId: pid, batchNo: 'PCM2611', qty: 5, unit: 'Strip', stockUnits: 5, amount: Paise.zero, packsPerBox: 99)], inv: 'S1');
+    expect(await perBox(), 15);
+    await receive([ReceiveLineInput(productId: pid, batchNo: 'PCM2611', qty: 1, unit: 'Box', stockUnits: 10, amount: Paise.zero, packsPerBox: 10)], inv: 'B2');
+    expect(await perBox(), 10);
+    expect(await qtyOf(db, bid), 165);
+
+    // Out of range: nothing saved, medicine unchanged.
+    for (final bad in [0, maxPacksPerBox + 1]) {
+      await expectLater(
+        receive([ReceiveLineInput(productId: pid, batchNo: 'PCM2611', qty: 1, unit: 'Box', stockUnits: 10, amount: Paise.zero, packsPerBox: bad)], inv: 'BAD$bad'),
+        throwsA(isA<PurchaseException>()),
+      );
+    }
+    expect(await perBox(), 10);
+    expect(await qtyOf(db, bid), 165);
+  });
+
+  test('a bad later line rolls back a remembered strips per box', () async {
+    final (pid, _) = await addMed(db, qty: 0);
+    await expectLater(
+      receive([
+        ReceiveLineInput(productId: pid, batchNo: 'PCM2611', qty: 2, unit: 'Box', stockUnits: 20, amount: Paise.zero, packsPerBox: 10),
+        ReceiveLineInput(productId: pid, batchNo: 'NEW1', qty: 1, unit: 'Box', stockUnits: 10, amount: Paise.zero, packsPerBox: 10),
+      ]),
+      throwsA(isA<PurchaseException>()),
+    );
+    expect((await db.catalogDao.stockRow(pid, now: t0))!.packsPerBox, isNull);
   });
 
   test('close short and cancel only from the right status', () async {

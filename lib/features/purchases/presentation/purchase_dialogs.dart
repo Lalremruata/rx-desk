@@ -171,7 +171,9 @@ class _ProductPickerState extends ConsumerState<ProductPicker> {
   }
 
   Future<void> _addMedicine() async {
-    final id = await showAddMedicineDialog(context, initialName: query.trim(), showInInventory: false);
+    // Called from a stockist receipt: the receipt line adds the stock, so
+    // no opening-stock fields (they would count it twice).
+    final id = await showAddMedicineDialog(context, initialName: query.trim(), showInInventory: false, allowOpeningStock: false);
     if (id == null || !mounted) return;
     final row = await ref.read(inventoryRepositoryProvider).stockRow(id);
     if (row != null && mounted) _pick(row);
@@ -574,7 +576,9 @@ class _OrderLineEditor extends StatelessWidget {
 // Receive invoice
 
 class _DraftReceiveLine {
-  _DraftReceiveLine({this.order, this.product, required this.qty, required this.unit, required this.moreExpected}) : stockUnits = qty;
+  _DraftReceiveLine({this.order, StockRow? product, required this.qty, required this.unit, required this.moreExpected}) {
+    setProduct(product);
+  }
 
   final int key = _nextKey++;
   static int _nextKey = 0;
@@ -583,12 +587,34 @@ class _DraftReceiveLine {
   StockRow? product;
   String qty;
   String unit;
+
+  /// Packs (strips) in one box — asked when [unit] is Box; prefilled from
+  /// the medicine and saved back on it with the receipt.
+  String packsPerBox = '';
   String batch = '';
   String expiry = '';
-  String stockUnits;
+
+  /// In packs (strips); × units per pack on save.
+  String stockUnits = '';
   bool stockUnitsEdited = false;
   String amount = '';
   bool moreExpected;
+
+  bool get needsPacksPerBox => unitNeedsPacksPerBox(unit);
+
+  /// Sets the medicine, taking its remembered strips per box.
+  void setProduct(StockRow? p) {
+    product = p;
+    if (p?.packsPerBox case final n?) packsPerBox = '$n';
+    recomputeStock();
+  }
+
+  /// "Add to stock" follows qty × strips per box until the user types it.
+  void recomputeStock() {
+    if (stockUnitsEdited) return;
+    final n = defaultStockPacks(qty: int.tryParse(qty) ?? 0, unit: unit, packsPerBox: int.tryParse(packsPerBox));
+    stockUnits = n == null ? '' : '$n';
+  }
 }
 
 /// Receive one stockist invoice (SPEC §4.7 / §5.9).
@@ -639,7 +665,7 @@ class _ReceiveInvoiceDialogState extends ConsumerState<ReceiveInvoiceDialog> {
       if (pid == null) continue;
       final row = await repo.stockRow(pid);
       if (!mounted) return;
-      setState(() => l.product = row);
+      setState(() => l.setProduct(row));
     }
   }
 
@@ -658,6 +684,12 @@ class _ReceiveInvoiceDialogState extends ConsumerState<ReceiveInvoiceDialog> {
       if (l.product == null) e['$k-product'] = 'Pick the medicine this is';
       if ((int.tryParse(l.qty) ?? 0) < 1) e['$k-qty'] = 'Qty';
       if ((int.tryParse(l.stockUnits) ?? 0) < 1) e['$k-units'] = 'Units';
+      if (l.product case final p? when l.needsPacksPerBox) {
+        final n = int.tryParse(l.packsPerBox) ?? 0;
+        if (n < 1 || n > maxPacksPerBox) {
+          e['$k-perbox'] = l.packsPerBox.trim().isEmpty ? 'How many ${PackNouns.of(p.category).packs} in a box?' : '1–$maxPacksPerBox';
+        }
+      }
       if (l.batch.trim().isEmpty) e['$k-batch'] = 'Batch no.';
       if (l.amount.trim().isNotEmpty && Paise.tryParse(l.amount) == null) e['$k-amount'] = 'Amount';
       final batches = l.product == null ? null : ref.read(productBatchesProvider(l.product!.id)).value;
@@ -717,6 +749,7 @@ class _ReceiveInvoiceDialogState extends ConsumerState<ReceiveInvoiceDialog> {
                     stockUnits: int.parse(l.stockUnits) * l.product!.packSize,
                     amount: Paise.tryParse(l.amount) ?? Paise.zero,
                     moreExpected: l.moreExpected,
+                    packsPerBox: l.needsPacksPerBox ? int.tryParse(l.packsPerBox) : null,
                   ),
               ],
               billTotal: _billTotal,
@@ -1043,6 +1076,13 @@ class _ReceiveLineCard extends ConsumerWidget {
     final digits = [FilteringTextInputFormatter.digitsOnly];
     final short = o != null && line.unit == o.unit && o.receivedSameUnit + (int.tryParse(line.qty) ?? 0) < o.qty;
     final otherUnit = o != null && line.unit != o.unit;
+    final nouns = PackNouns.of(p?.category ?? '');
+    final boxQty = int.tryParse(line.qty) ?? 0;
+    final perBox = int.tryParse(line.packsPerBox) ?? 0;
+    final boxMaths = p == null || !line.needsPacksPerBox || boxQty < 1 || perBox < 1 || perBox > maxPacksPerBox
+        ? null
+        : '${qtyLabel(boxQty, line.unit)} × $perBox = ${formatCount(boxQty * perBox)} ${nouns.packWord(boxQty * perBox)}'
+              '${p.packsPerBox == perBox ? '' : ' · $perBox per box will be remembered for ${p.name}'}';
 
     final batchHint = p == null
         ? null
@@ -1100,9 +1140,7 @@ class _ReceiveLineCard extends ConsumerWidget {
               fieldKey: ValueKey('recv-link-$index'),
               label: 'Medicine',
               allowAddMedicine: true,
-              onPicked: (r) => _set(() {
-                line.product = r;
-              }),
+              onPicked: (r) => _set(() => line.setProduct(r)),
             ),
             if (errors['$k-product'] case final e?) ...[
               const SizedBox(height: 4),
@@ -1123,7 +1161,7 @@ class _ReceiveLineCard extends ConsumerWidget {
                   inputFormatters: digits,
                   onChanged: (v) => _set(recompute: true, () {
                     line.qty = v;
-                    if (!line.stockUnitsEdited) line.stockUnits = v;
+                    line.recomputeStock();
                   }),
                 ),
                 AppDropdown<String>(
@@ -1131,8 +1169,25 @@ class _ReceiveLineCard extends ConsumerWidget {
                   labelAbove: true,
                   value: line.unit,
                   options: [for (final u in purchaseUnits) DropdownOption(u, u)],
-                  onChanged: (v) => _set(recompute: true, () => line.unit = v),
+                  onChanged: (v) => _set(recompute: true, () {
+                    line.unit = v;
+                    line.recomputeStock();
+                  }),
                 ),
+                if (line.needsPacksPerBox)
+                  AppTextField(
+                    fieldKey: ValueKey('recv-perbox-$index'),
+                    label: nouns.perBoxLabel,
+                    hint: p.packsPerBox == null ? 'e.g. 10' : '${p.packsPerBox}',
+                    value: line.packsPerBox,
+                    error: errors['$k-perbox'],
+                    keyboardType: TextInputType.number,
+                    inputFormatters: digits,
+                    onChanged: (v) => _set(() {
+                      line.packsPerBox = v;
+                      line.recomputeStock();
+                    }),
+                  ),
                 AppTextField(
                   fieldKey: ValueKey('recv-batch-$index'),
                   label: 'Batch no.',
@@ -1153,9 +1208,7 @@ class _ReceiveLineCard extends ConsumerWidget {
                 ),
                 AppTextField(
                   fieldKey: ValueKey('recv-units-$index'),
-                  label: (line.product?.sellsLoose ?? false)
-                      ? 'Add to stock (${PackNouns.of(line.product!.category).packs} of ${line.product!.packSize})'
-                      : 'Add to stock (units)',
+                  label: p.sellsLoose ? 'Add to stock (${nouns.packs} of ${p.packSize})' : 'Add to stock (${nouns.packs})',
                   hint: '0',
                   value: line.stockUnits,
                   error: errors['$k-units'],
@@ -1183,6 +1236,7 @@ class _ReceiveLineCard extends ConsumerWidget {
               spacing: AppSpace.lg,
               runSpacing: 4,
               children: [
+                if (boxMaths != null) Text(boxMaths, key: ValueKey('recv-boxmaths-$index'), style: AppType.smallStrong),
                 if (batchHint != null) Text(batchHint, style: AppType.caption),
                 if (check == ExpiryCheck.near)
                   Text(

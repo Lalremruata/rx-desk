@@ -23,6 +23,9 @@ class PackNouns {
       };
 
   String packWord(int n) => n == 1 ? pack : packs;
+
+  /// "Strips per box" — how many packs one stockist box holds.
+  String get perBoxLabel => '${packs[0].toUpperCase()}${packs.substring(1)} per box';
   String unitWord(int n) => n == 1 ? unit : units;
 
   /// Label for the units-per-pack field: "Tablets per strip".
@@ -35,6 +38,9 @@ class PackNouns {
 
 /// Largest pack size accepted.
 const int maxPackSize = 1000;
+
+/// Most packs (strips) one stockist box can hold (products.packs_per_box).
+const int maxPacksPerBox = 500;
 
 /// Whole packs and loose units in [units]. Negative values split by
 /// magnitude with the sign on both parts.

@@ -88,6 +88,7 @@ products       id PK, name, salt, form, category, pack, manufacturer_id FK,
                schedule TEXT ('', 'H', 'H1', 'X'), hsn, gst_rate INT (0|5|12|18),
                mrp_paise INT (per pack), reorder_level INT (packs), rack, barcode UNIQUE NULL,
                units_per_pack INT DEFAULT 1                                     -- v6
+               packs_per_box INT NULL  (strips in one stockist box; NULL = unknown) -- v11
                is_active BOOL, last_sold_at INT NULL, created_at, updated_at
                category ∈ Tablet | Capsule | Syrup | Injection | Topical | OTC
 
@@ -359,6 +360,12 @@ Adding the same batch again increments qty, capped at the batch's qty (toast if 
   lines. Each line: product, qty + unit received, batch no (existing or new), expiry (new batch
   only), **stock units** (sale units added to the batch, prefilled from qty) and the amount as
   printed on the stockist's invoice. Lines need not come from an order (unordered extras).
+- **Boxes → strips.** For a line in unit **Box** the line also asks *Strips per box* (packs per
+  box; "Packs per box" for non-tablets), prefilled from `products.packs_per_box`. Stock units
+  are prefilled as qty × strips per box (e.g. 10 Box × 15 = 150 strips) and stay editable; a
+  Box line can't be saved without it (1–500). Saving the receipt stores the number on the
+  medicine (same transaction) so the next Box receipt is prefilled. Other units are 1 pack
+  each. It can also be set or corrected in Add / Edit medicine (blank = ask on receipt).
 - Saving a receipt is **one transaction**: upsert stockist, insert receipt + lines, add stock
   per §4.5 (movement `reason='receive'`, `ref_type='purchase'`, `ref_id`=receipt), update
   order-line statuses. Duplicate (stockist, invoice no) is rejected.
@@ -373,7 +380,8 @@ Adding the same batch again increments qty, capped at the batch's qty (toast if 
 - `part` lines can be **closed short** (supplier won't send the rest); `pending` lines can be
   **cancelled**. Order lines and receipts are never hard-deleted.
 - A free-text line must be linked to a catalog product (or a new medicine added) before it can
-  be received; the link is saved on the order line.
+  be received; the link is saved on the order line. Add medicine opened from a receipt has no
+  first batch / opening qty fields — the receipt line adds the stock (no double count).
 - Permission: `changeStock` to place, receive, close or cancel. Everyone can view.
 
 ### 4.8 Stockist dues (ledger)
@@ -574,7 +582,7 @@ Layout: left 3/5 (search, quick add, bill grid, shortcut hints), right 2/5 "Bill
   "Near expiry", "Expired · return to supplier", "Sold out", "OK"), then barcode, HSN, GST,
   reorder level, last sold.
 - Dialogs: **Add medicine** (name, salt, maker, pack, category, schedule, barcode, first batch,
-  expiry month, opening qty, reorder level, MRP incl. GST, GST rate, rack) and
+  expiry month, opening qty, reorder level, MRP incl. GST, GST rate, rack, strips per box) and
   **Receive stock** (batch no — existing or new, expiry for new, qty, quick +10/25/50/100).
 - Editing (§4.13, permission `changeStock`): the expanded row has **Edit medicine** and
   **Hide medicine** buttons and an edit icon on every batch row. **Edit batch** dialog: batch

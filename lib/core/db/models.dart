@@ -45,6 +45,9 @@ abstract class StockRow with _$StockRow {
 
     /// Units per pack (1 = not sold loose). [saleable] is in units.
     @Default(1) int packSize,
+
+    /// Packs (strips) in one stockist box; null = not known yet.
+    int? packsPerBox,
     required int manufacturerId,
     required String maker,
     required String schedule,
@@ -180,6 +183,9 @@ abstract class NewProduct with _$NewProduct {
     @Default(20) int reorderLevel,
     @Default('') String rack,
 
+    /// Packs (strips) in one stockist box; null = not known.
+    int? packsPerBox,
+
     /// Optional first batch with opening stock.
     String? batchNo,
     String? expiry,
@@ -204,6 +210,9 @@ abstract class ProductEdit with _$ProductEdit {
     required Paise mrp,
     required int reorderLevel,
     @Default('') String rack,
+
+    /// Packs (strips) in one stockist box; null = not known.
+    int? packsPerBox,
   }) = _ProductEdit;
 }
 

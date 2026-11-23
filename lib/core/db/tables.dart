@@ -23,6 +23,10 @@ class Products extends Table {
   /// v6: units (tablets) in one pack (strip). Stock, bill and movement
   /// quantities are in these units; MRP is per pack. 1 = not sold loose.
   IntColumn get unitsPerPack => integer().withDefault(const Constant(1))();
+
+  /// v11: packs (strips) in one stockist box, for receiving "10 Box".
+  /// Null = not known yet (asked on the receive line, then remembered).
+  IntColumn get packsPerBox => integer().nullable()();
   IntColumn get manufacturerId => integer().references(Manufacturers, #id)();
 
   /// '' | 'H' | 'H1' | 'X'

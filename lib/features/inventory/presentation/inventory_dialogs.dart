@@ -20,11 +20,16 @@ import '../application/inventory_rules.dart';
 import '../data/inventory_repository.dart';
 
 /// Resolves to the new product's id, or null if cancelled.
-Future<int?> showAddMedicineDialog(BuildContext context, {String initialName = '', bool showInInventory = true}) => showAppDialog<int>(
+Future<int?> showAddMedicineDialog(
+  BuildContext context, {
+  String initialName = '',
+  bool showInInventory = true,
+  bool allowOpeningStock = true,
+}) => showAppDialog<int>(
       context,
       maxWidth: 640,
       topPadding: 48,
-      builder: (_) => AddMedicineDialog(initialName: initialName, showInInventory: showInInventory),
+      builder: (_) => AddMedicineDialog(initialName: initialName, showInInventory: showInInventory, allowOpeningStock: allowOpeningStock),
     );
 
 /// Edit medicine (SPEC §5.3): the Add medicine form without first-batch
@@ -76,7 +81,7 @@ class _DialogHeader extends StatelessWidget {
 
 /// Add medicine (SPEC §5.3); with [editing], Edit medicine.
 class AddMedicineDialog extends ConsumerStatefulWidget {
-  const AddMedicineDialog({super.key, this.initialName = '', this.showInInventory = true, this.editing});
+  const AddMedicineDialog({super.key, this.initialName = '', this.showInInventory = true, this.allowOpeningStock = true, this.editing});
 
   /// The medicine being edited; null = adding a new one.
   final StockRow? editing;
@@ -86,6 +91,10 @@ class AddMedicineDialog extends ConsumerStatefulWidget {
 
   /// Filter Inventory to the new medicine after saving.
   final bool showInInventory;
+
+  /// Show the first-batch / opening-stock fields. Off when adding from a
+  /// stockist receipt: the receipt line adds the stock (no double count).
+  final bool allowOpeningStock;
 
   @override
   ConsumerState<AddMedicineDialog> createState() => _AddMedicineDialogState();
@@ -102,10 +111,14 @@ class _AddMedicineDialogState extends ConsumerState<AddMedicineDialog> {
   String batch = '', expiry = '', qty = '';
   late String reorder = '${_e?.reorderLevel ?? ref.read(settingsProvider).defaultReorderLevel}';
   late String size = '${_e?.packSize ?? 1}';
+  late String perBox = _e?.packsPerBox == null ? '' : '${_e!.packsPerBox}';
   late bool sizeEdited = _editing;
   late int gst = _e?.gstRate ?? 12;
 
   int get _size => int.tryParse(size) ?? 1;
+
+  /// Blank = not known.
+  int? get _perBox => perBox.trim().isEmpty ? null : int.tryParse(perBox.trim());
 
   /// Prefills units per pack from "Strip of 10" until the user types one.
   void _suggestSize() {
@@ -148,6 +161,7 @@ class _AddMedicineDialogState extends ConsumerState<AddMedicineDialog> {
         if (batch.trim().isEmpty && (int.tryParse(qty) ?? 0) > 0) 'batch': 'Opening stock needs a batch number',
         if (qty.isNotEmpty && int.tryParse(qty) == null) 'qty': 'Whole number',
         if (int.tryParse(reorder) == null) 'reorder': 'Whole number',
+        if (perBox.trim().isNotEmpty && ((_perBox ?? 0) < 1 || _perBox! > maxPacksPerBox)) 'perbox': '1–$maxPacksPerBox, or leave blank',
         if ((int.tryParse(size) ?? 0) < 1 || (int.tryParse(size) ?? 0) > maxPackSize) 'size': '1–$maxPackSize',
       };
 
@@ -177,6 +191,7 @@ class _AddMedicineDialogState extends ConsumerState<AddMedicineDialog> {
               mrp: Paise.tryParse(mrp)!,
               reorderLevel: int.parse(reorder),
               rack: rack.trim(),
+              packsPerBox: _perBox,
               batchNo: batch.trim().isEmpty ? null : batch.trim(),
               expiry: parseExpiryInput(expiry),
               // Opening qty is typed in packs; stock is kept in units.
@@ -215,6 +230,7 @@ class _AddMedicineDialogState extends ConsumerState<AddMedicineDialog> {
               mrp: Paise.tryParse(mrp)!,
               reorderLevel: int.parse(reorder),
               rack: rack.trim(),
+              packsPerBox: _perBox,
             ),
           );
       final filter = ref.read(inventoryFilterProvider);
@@ -299,7 +315,7 @@ class _AddMedicineDialogState extends ConsumerState<AddMedicineDialog> {
               onChanged: (v) => setState(() => schedule = v),
             ),
             f('barcode', 'Barcode', 'Scan or type', barcode, (v) => barcode = v, fmt: digits, kb: TextInputType.number),
-            if (!_editing) ...[
+            if (!_editing && widget.allowOpeningStock) ...[
               f('batch', 'First batch no.', 'B12345', batch, (v) => batch = v.toUpperCase()),
               f('expiry', 'Expiry', 'MM/YYYY', expiry, (v) => expiry = v, kb: TextInputType.datetime),
               f('qty', _size > 1 ? 'Opening qty (${PackNouns.of(category).packs})' : 'Opening qty', '0', qty, (v) => qty = v,
@@ -318,6 +334,8 @@ class _AddMedicineDialogState extends ConsumerState<AddMedicineDialog> {
             ),
             f('hsn', 'HSN code', '3004', hsn, (v) => hsn = v, fmt: digits, kb: TextInputType.number),
             f('rack', 'Rack / shelf', 'A1', rack, (v) => rack = v),
+            f('perbox', PackNouns.of(category).perBoxLabel, 'Blank = ask when received in boxes', perBox, (v) => perBox = v,
+                fmt: digits, kb: TextInputType.number),
           ],
         ),
         if (e != null)

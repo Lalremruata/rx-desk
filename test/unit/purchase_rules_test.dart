@@ -70,4 +70,15 @@ void main() {
     expect(receiveExpiryCheck('2027-02', now, 3), ExpiryCheck.near);
     expect(receiveExpiryCheck('2027-03', now, 3), ExpiryCheck.ok);
   });
+
+  test('stock packs for a receive line: Box × strips per box, other units 1:1', () {
+    expect(unitNeedsPacksPerBox('Box'), isTrue);
+    expect(unitNeedsPacksPerBox('Strip'), isFalse);
+    expect(defaultStockPacks(qty: 10, unit: 'Box', packsPerBox: 15), 150);
+    expect(defaultStockPacks(qty: 10, unit: 'Box'), isNull); // not known yet → ask
+    expect(defaultStockPacks(qty: 10, unit: 'Box', packsPerBox: 0), isNull);
+    expect(defaultStockPacks(qty: 10, unit: 'Strip', packsPerBox: 15), 10);
+    expect(defaultStockPacks(qty: 3, unit: 'Bottle'), 3);
+    expect(defaultStockPacks(qty: 0, unit: 'Box', packsPerBox: 15), isNull);
+  });
 }

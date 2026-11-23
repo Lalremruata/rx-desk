@@ -130,6 +130,19 @@ ExpiryCheck receiveExpiryCheck(String expiry, DateTime now, int expiryWindowMont
   return ExpiryCheck.ok;
 }
 
+/// Units that hold several packs (strips) — the receive line asks how many.
+bool unitNeedsPacksPerBox(String unit) => unit == 'Box';
+
+/// Packs (strips) to add to stock for a receive line of [qty] [unit]
+/// (SPEC §4.7): a Box is [packsPerBox] packs (null = not known yet → null,
+/// ask); any other unit is one pack each.
+int? defaultStockPacks({required int qty, required String unit, int? packsPerBox}) {
+  if (qty < 1) return null;
+  if (!unitNeedsPacksPerBox(unit)) return qty;
+  if (packsPerBox == null || packsPerBox < 1) return null;
+  return qty * packsPerBox;
+}
+
 /// "20 Box", "1 Strip".
 String qtyLabel(int qty, String unit) => '$qty $unit';
 

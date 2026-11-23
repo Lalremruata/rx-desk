@@ -28,7 +28,7 @@ class CatalogDao extends DatabaseAccessor<AppDatabase> with _$CatalogDaoMixin {
   // ?2 = last month inside the expiry window.
 
   static const String _stockCols = '''
-    p.id, p.name, p.salt, p.form, p.category, p.pack, p.units_per_pack, p.manufacturer_id, m.name AS maker,
+    p.id, p.name, p.salt, p.form, p.category, p.pack, p.units_per_pack, p.packs_per_box, p.manufacturer_id, m.name AS maker,
     p.schedule, p.hsn, p.gst_rate, p.mrp_paise, p.reorder_level, p.rack, p.barcode,
     p.last_sold_at, p.created_at,
     (SELECT COALESCE(SUM(b.qty), 0) FROM batches b WHERE b.product_id = p.id AND b.expiry >= ?1) AS saleable,
@@ -48,6 +48,7 @@ class CatalogDao extends DatabaseAccessor<AppDatabase> with _$CatalogDaoMixin {
         category: r.read<String>('category'),
         pack: r.read<String>('pack'),
         packSize: r.read<int>('units_per_pack'),
+        packsPerBox: r.readNullable<int>('packs_per_box'),
         manufacturerId: r.read<int>('manufacturer_id'),
         maker: r.read<String>('maker'),
         schedule: r.read<String>('schedule'),
@@ -99,6 +100,7 @@ class CatalogDao extends DatabaseAccessor<AppDatabase> with _$CatalogDaoMixin {
     return transaction(() async {
       _checkDetails(name: np.name, category: np.category, schedule: np.schedule, gstRate: np.gstRate, mrp: np.mrp);
       if (np.packSize < 1 || np.packSize > maxPackSize) throw const CatalogException('Units per pack must be 1–$maxPackSize');
+      _checkPacksPerBox(np.packsPerBox);
       final barcode = await _freeBarcode(np.barcode);
       final mid = await manufacturerIdFor(np.maker);
       final ts = at.toUtc().millisecondsSinceEpoch;
@@ -110,6 +112,7 @@ class CatalogDao extends DatabaseAccessor<AppDatabase> with _$CatalogDaoMixin {
           category: np.category,
           pack: Value(np.pack.trim()),
           unitsPerPack: Value(np.packSize),
+          packsPerBox: Value(np.packsPerBox),
           manufacturerId: mid,
           schedule: Value(np.schedule),
           hsn: Value(np.hsn.trim()),
@@ -136,6 +139,10 @@ class CatalogDao extends DatabaseAccessor<AppDatabase> with _$CatalogDaoMixin {
       }
       return pid;
     });
+  }
+
+  static void _checkPacksPerBox(int? n) {
+    if (n != null && (n < 1 || n > maxPacksPerBox)) throw const CatalogException('Strips per box must be 1–$maxPacksPerBox');
   }
 
   static void _checkDetails({
@@ -170,6 +177,7 @@ class CatalogDao extends DatabaseAccessor<AppDatabase> with _$CatalogDaoMixin {
       if (p == null) throw const CatalogException('Medicine not found');
       _checkDetails(name: e.name, category: e.category, schedule: e.schedule, gstRate: e.gstRate, mrp: e.mrp);
       if (e.reorderLevel < 0) throw const CatalogException('Reorder level can’t be negative');
+      _checkPacksPerBox(e.packsPerBox);
       final barcode = await _freeBarcode(e.barcode, exceptProductId: productId);
       final mid = await manufacturerIdFor(e.maker);
       await (update(products)..where((x) => x.id.equals(productId))).write(
@@ -186,6 +194,7 @@ class CatalogDao extends DatabaseAccessor<AppDatabase> with _$CatalogDaoMixin {
           reorderLevel: Value(e.reorderLevel),
           rack: Value(e.rack.trim()),
           barcode: Value(barcode.isEmpty ? null : barcode),
+          packsPerBox: Value(e.packsPerBox),
           updatedAt: Value(at.toUtc().millisecondsSinceEpoch),
         ),
       );

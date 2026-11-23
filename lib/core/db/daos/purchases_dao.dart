@@ -4,6 +4,7 @@ import '../../money/paise.dart';
 import '../../purchases/dues_rules.dart';
 import '../../purchases/purchase_rules.dart';
 import '../../utils/expiry.dart';
+import '../../utils/pack.dart';
 import '../app_database.dart';
 import 'dues_dao.dart';
 
@@ -33,6 +34,7 @@ class ReceiveLineInput {
     required this.stockUnits,
     required this.amount,
     this.moreExpected = false,
+    this.packsPerBox,
   });
 
   /// Null for an item that wasn't on an order.
@@ -46,6 +48,10 @@ class ReceiveLineInput {
   final String unit;
   final int stockUnits;
   final Paise amount;
+
+  /// Packs (strips) per box for a Box line; saved on the medicine so the
+  /// next Box receipt is prefilled. Null = leave the medicine as it is.
+  final int? packsPerBox;
 
   /// "Still expecting more" for a short line.
   final bool moreExpected;
@@ -428,6 +434,13 @@ class PurchasesDao extends DatabaseAccessor<AppDatabase> with _$PurchasesDaoMixi
         if (!purchaseUnits.contains(l.unit)) throw PurchaseException('$name — unknown unit ${l.unit}');
         if (l.stockUnits < 1) throw PurchaseException('$name — enter the units to add to stock');
         if (l.amount.value < 0) throw PurchaseException('$name — amount can’t be negative');
+        if (l.packsPerBox case final n? when unitNeedsPacksPerBox(l.unit)) {
+          if (n < 1 || n > maxPacksPerBox) throw PurchaseException('$name — strips per box must be 1–$maxPacksPerBox');
+          if (n != product.packsPerBox) {
+            await (update(products)..where((p) => p.id.equals(product.id)))
+                .write(ProductsCompanion(packsPerBox: Value(n), updatedAt: Value(ts)));
+          }
+        }
 
         if (l.orderLineId != null) {
           final o = await _orderLine(l.orderLineId!);
