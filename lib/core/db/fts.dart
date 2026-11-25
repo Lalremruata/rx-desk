@@ -78,6 +78,12 @@ const List<String> indexStatements = [
   ...creditIndexStatements,
   ...sourcesIndexStatements,
   ...cashIndexStatements,
+  ...boxSizeIndexStatements,
+];
+
+/// v16: box size per stockist (SPEC §4.7) — a medicine's receipt lines.
+const List<String> boxSizeIndexStatements = [
+  'CREATE INDEX IF NOT EXISTS idx_receipt_lines_product_box ON receipt_lines(product_id, receipt_id) WHERE packs_per_box IS NOT NULL',
 ];
 
 /// v14: day-end cash closing (SPEC §4.14) — the day's cash, by date.

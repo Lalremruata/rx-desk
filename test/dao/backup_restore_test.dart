@@ -519,6 +519,48 @@ void main() {
     expect((await migrated.salesDao.invoiceWithItems(saved.invoiceId))!.invoice.placeOfSupply, '15');
     expect((await migrated.select(migrated.customers).getSingle()).gstin, '15AAACM1234A1ZD');
   });
+
+  test('migration v15 → v16: receipt lines get packs_per_box; old lines stay null; a Box receipt records it', () async {
+    final v15Path = '${dir.path}/v15.sqlite';
+    final db = fileDb(v15Path);
+    final (p, b) = await addMed(db, qty: 0);
+    await db.purchasesDao.receive(
+      ReceiveRequest(
+        supplierName: 'Life Drugs Centre',
+        invoiceNo: 'OLD1',
+        receivedDate: '2026-09-02',
+        lines: [ReceiveLineInput(productId: p, batchNo: 'PCM2611', qty: 2, unit: 'Box', stockUnits: 20, amount: Paise.zero, packsPerBox: 10)],
+      ),
+      at: t0,
+      now: t0,
+    );
+    await db.customStatement('DROP INDEX idx_receipt_lines_product_box');
+    await db.customStatement('ALTER TABLE receipt_lines DROP COLUMN packs_per_box');
+    await db.customStatement('PRAGMA user_version = 15');
+    await db.close();
+
+    final migrated = fileDb(v15Path);
+    addTearDown(migrated.close);
+    expect((await migrated.customSelect('PRAGMA user_version').getSingle()).read<int>('user_version'), latestSchemaVersion);
+    final idx = await migrated.customSelect("SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'idx_receipt_lines_product_box'").get();
+    expect(idx, hasLength(1));
+    expect((await migrated.select(migrated.receiptLines).getSingle()).packsPerBox, isNull);
+    expect(await migrated.purchasesDao.boxSizeHistory(p), isEmpty);
+    expect((await migrated.catalogDao.stockRow(p, now: t0))!.packsPerBox, 10); // the fallback
+
+    await migrated.purchasesDao.receive(
+      ReceiveRequest(
+        supplierName: 'Life Drugs Centre',
+        invoiceNo: 'NEW1',
+        receivedDate: '2026-09-09',
+        lines: [ReceiveLineInput(productId: p, batchNo: 'PCM2611', qty: 1, unit: 'Box', stockUnits: 20, amount: Paise.zero, packsPerBox: 20)],
+      ),
+      at: t0,
+      now: t0,
+    );
+    expect((await migrated.purchasesDao.boxSizeHistory(p)).single.packsPerBox, 20);
+    expect(await qtyOf(migrated, b), 40);
+  });
 }
 
 /// Turns a current database back into v7: stockist directory gone.

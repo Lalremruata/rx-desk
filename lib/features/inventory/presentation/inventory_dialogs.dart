@@ -342,7 +342,7 @@ class _AddMedicineDialogState extends ConsumerState<AddMedicineDialog> {
             ),
             f('hsn', 'HSN code', '3004', hsn, (v) => hsn = v, fmt: digits, kb: TextInputType.number),
             f('rack', 'Rack / shelf', 'A1', rack, (v) => rack = v),
-            f('perbox', PackNouns.of(category).perBoxLabel, 'Blank = ask when received in boxes', perBox, (v) => perBox = v,
+            f('perbox', PackNouns.of(category).perBoxLabel, 'Default — each stockist’s is remembered', perBox, (v) => perBox = v,
                 fmt: digits, kb: TextInputType.number),
           ],
         ),

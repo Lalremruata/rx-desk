@@ -770,7 +770,17 @@ class _ReceiptLines extends ConsumerWidget {
                       Expanded(child: Text(l.itemName, style: AppType.small, overflow: TextOverflow.ellipsis)),
                       SizedBox(width: 100, child: Text(l.batchNo, style: AppType.mono)),
                       SizedBox(width: 84, child: Text(formatExpiry(l.expiry), style: AppType.small)),
-                      SizedBox(width: 90, child: Text(qtyLabel(l.qty, l.unit), textAlign: TextAlign.right, style: AppType.small)),
+                      SizedBox(
+                        width: 90,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Text(qtyLabel(l.qty, l.unit), textAlign: TextAlign.right, style: AppType.small),
+                            // The stockist's box size on this invoice (v16).
+                            if (l.packsPerBox case final n?) Text('$n per box', key: ValueKey('receipt-perbox-${l.id}'), style: AppType.caption),
+                          ],
+                        ),
+                      ),
                       SizedBox(width: 90, child: Text(formatCount(l.stockUnits), textAlign: TextAlign.right, style: AppType.smallStrong)),
                       SizedBox(
                         width: 100,

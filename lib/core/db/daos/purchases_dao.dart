@@ -54,8 +54,9 @@ class ReceiveLineInput {
   final int stockUnits;
   final Paise amount;
 
-  /// Packs (strips) per box for a Box line; saved on the medicine so the
-  /// next Box receipt is prefilled. Null = leave the medicine as it is.
+  /// Packs (strips) per box for a Box line; kept on the receipt line (the
+  /// stockist's box size, v16) and saved on the medicine so the next Box
+  /// receipt is prefilled. Null = leave the medicine as it is.
   final int? packsPerBox;
 
   /// "Still expecting more" for a short line.
@@ -522,6 +523,7 @@ class PurchasesDao extends DatabaseAccessor<AppDatabase> with _$PurchasesDaoMixi
             discBp: Value(l.discBp),
             gstRate: Value(l.gstRate),
             mrpPaise: Value((await (select(batches)..where((b) => b.id.equals(r.batchId))).getSingle()).mrpPaise),
+            packsPerBox: Value(unitNeedsPacksPerBox(l.unit) ? l.packsPerBox : null),
           ),
         );
         // Stockist directory (SPEC §4.11): remember where it came from.
@@ -767,6 +769,34 @@ class PurchasesDao extends DatabaseAccessor<AppDatabase> with _$PurchasesDaoMixi
       ],
       hasMore: rows.length > limit,
     );
+  }
+
+  /// Box sizes a medicine came in, one per stockist (their latest Box
+  /// receipt line), newest first (SPEC §4.7).
+  Future<List<BoxSizeSeen>> boxSizeHistory(int productId) async {
+    final rows = await customSelect(
+      '''
+      SELECT supplier_id, supplier, packs_per_box, received_date FROM (
+        SELECT r.supplier_id, s.name AS supplier, rl.packs_per_box, r.received_date,
+               ROW_NUMBER() OVER (PARTITION BY r.supplier_id ORDER BY r.received_date DESC, r.id DESC, rl.line_no DESC) AS rn
+        FROM receipt_lines rl
+        JOIN purchase_receipts r ON r.id = rl.receipt_id JOIN suppliers s ON s.id = r.supplier_id
+        WHERE rl.product_id = ?1 AND rl.packs_per_box IS NOT NULL
+      ) WHERE rn = 1
+      ORDER BY received_date DESC, supplier
+      ''',
+      variables: [Variable.withInt(productId)],
+      readsFrom: _reads,
+    ).get();
+    return [
+      for (final r in rows)
+        BoxSizeSeen(
+          supplierId: r.read<int>('supplier_id'),
+          supplierName: r.read<String>('supplier'),
+          packsPerBox: r.read<int>('packs_per_box'),
+          receivedDate: r.read<String>('received_date'),
+        ),
+    ];
   }
 
   Future<List<ReceiptLine>> linesOf(int receiptId) =>

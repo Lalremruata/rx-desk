@@ -6,6 +6,7 @@ import '../../../core/db/daos/dues_dao.dart';
 import '../../../core/db/daos/purchases_dao.dart';
 import '../../../core/db/daos/sources_dao.dart';
 import '../../../core/db/db_provider.dart';
+import '../../../core/purchases/purchase_rules.dart';
 import '../../../core/utils/expiry.dart';
 import '../data/purchases_repository.dart';
 
@@ -165,6 +166,12 @@ Stream<int> openOrderCount(Ref ref) => ref.watch(purchasesRepositoryProvider).wa
 final receiptLinesProvider = FutureProvider.autoDispose.family<List<ReceiptLine>, int>((ref, receiptId) {
   ref.watch(purchasesVersionProvider);
   return ref.watch(purchasesRepositoryProvider).linesOf(receiptId);
+});
+
+/// A medicine's box size per stockist (SPEC §4.7), for the receive dialog.
+final boxSizeHistoryProvider = FutureProvider.autoDispose.family<List<BoxSizeSeen>, int>((ref, productId) {
+  ref.watch(purchasesVersionProvider);
+  return ref.watch(purchasesRepositoryProvider).boxSizeHistory(productId);
 });
 
 final suppliersProvider = FutureProvider.autoDispose<List<Supplier>>((ref) {

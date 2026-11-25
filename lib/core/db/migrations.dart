@@ -7,7 +7,7 @@ import 'fts.dart';
 
 /// Current schema version. Every bump needs a step in [_steps] and a test in
 /// test/dao/migration_test.dart (CLAUDE.md rule 10).
-const int latestSchemaVersion = 15;
+const int latestSchemaVersion = 16;
 
 /// `_steps[v]` migrates schema v → v + 1.
 final Map<int, Future<void> Function(AppDatabase db, Migrator m)> _steps = {
@@ -148,6 +148,15 @@ final Map<int, Future<void> Function(AppDatabase db, Migrator m)> _steps = {
     if (!await _hasColumn(db, 'customers', 'gstin')) await m.addColumn(db.customers, db.customers.gstin);
     if (!await _hasColumn(db, 'invoices', 'buyer_gstin')) await m.addColumn(db.invoices, db.invoices.buyerGstin);
     if (!await _hasColumn(db, 'invoices', 'place_of_supply')) await m.addColumn(db.invoices, db.invoices.placeOfSupply);
+  },
+  // v15 → v16: box size per stockist (SPEC §4.7) — strips per box on each
+  // Box receipt line. Not backfilled: old stock units may have been typed
+  // by hand (short boxes), so the medicine's own number stays the fallback.
+  15: (db, m) async {
+    if (!await _hasColumn(db, 'receipt_lines', 'packs_per_box')) await m.addColumn(db.receiptLines, db.receiptLines.packsPerBox);
+    for (final s in boxSizeIndexStatements) {
+      await db.customStatement(s);
+    }
   },
 };
 

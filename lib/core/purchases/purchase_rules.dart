@@ -4,6 +4,7 @@ library;
 import '../money/gst.dart';
 import '../money/paise.dart';
 import '../utils/expiry.dart';
+import '../utils/pack.dart';
 
 /// Pack units an order or stockist line can be counted in.
 const List<String> purchaseUnits = ['Box', 'Strip', 'Nos', 'Bottle', 'Vial', 'Amp', 'Tube', 'Pcs', 'Sachet'];
@@ -174,6 +175,68 @@ int? defaultStockPacks({required int qty, required String unit, int? packsPerBox
   if (!unitNeedsPacksPerBox(unit)) return qty;
   if (packsPerBox == null || packsPerBox < 1) return null;
   return qty * packsPerBox;
+}
+
+/// The last Box receipt of a medicine from one stockist (SPEC §4.7): the
+/// same medicine can come 10 strips to a box from one and 20 from another.
+class BoxSizeSeen {
+  const BoxSizeSeen({required this.supplierId, required this.supplierName, required this.packsPerBox, required this.receivedDate});
+
+  final int supplierId;
+  final String supplierName;
+  final int packsPerBox;
+
+  /// 'YYYY-MM-DD'.
+  final String receivedDate;
+}
+
+/// The entry for [supplierId] in a medicine's box-size history, if any.
+BoxSizeSeen? boxSizeFrom(List<BoxSizeSeen> history, int? supplierId) {
+  if (supplierId == null) return null;
+  for (final h in history) {
+    if (h.supplierId == supplierId) return h;
+  }
+  return null;
+}
+
+/// Strips per box to prefill: what this stockist sent last time, else the
+/// medicine's own number, else null (ask).
+int? suggestedPacksPerBox({BoxSizeSeen? fromStockist, int? productDefault}) {
+  if (fromStockist != null && fromStockist.packsPerBox >= 1) return fromStockist.packsPerBox;
+  if (productDefault != null && productDefault >= 1 && productDefault <= maxPacksPerBox) return productDefault;
+  return null;
+}
+
+/// A typed box size that differs from last time (SPEC §4.7). It doesn't
+/// block — a real pack change has to be recordable — but asks for a check,
+/// because a wrong number puts 2× or ½× the stock on the shelf.
+class BoxSizeWarning {
+  const BoxSizeWarning({required this.entered, required this.expected, this.stockist});
+
+  final int entered;
+
+  /// The number it was compared with.
+  final int expected;
+
+  /// The stockist [expected] came from; null = the medicine's own number.
+  final String? stockist;
+
+  String message(PackNouns nouns) => stockist == null
+      ? 'Usually $expected ${nouns.packWord(expected)} per box — check the box'
+      : 'Last box from $stockist had $expected ${nouns.packWord(expected)} — check the box';
+}
+
+/// Compares a typed box size with this stockist's last one, or (no history
+/// with them) the medicine's own number. Null when it matches, there is
+/// nothing to compare with, or [entered] isn't a valid size yet.
+BoxSizeWarning? boxSizeWarning({required int? entered, BoxSizeSeen? fromStockist, int? productDefault}) {
+  if (entered == null || entered < 1 || entered > maxPacksPerBox) return null;
+  if (fromStockist != null) {
+    if (fromStockist.packsPerBox == entered) return null;
+    return BoxSizeWarning(entered: entered, expected: fromStockist.packsPerBox, stockist: fromStockist.supplierName);
+  }
+  if (productDefault == null || productDefault < 1 || productDefault == entered) return null;
+  return BoxSizeWarning(entered: entered, expected: productDefault);
 }
 
 /// "20 Box", "1 Strip".

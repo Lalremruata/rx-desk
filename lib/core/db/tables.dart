@@ -384,6 +384,11 @@ class ReceiptLines extends Table {
 
   /// v12: the batch's MRP at receipt (snapshot).
   IntColumn get mrpPaise => integer().nullable()();
+
+  /// v16: strips per box used on a Box line (snapshot; null for other units
+  /// and for lines received before v16). The stockist's last one prefills
+  /// the next Box receipt from them (SPEC §4.7).
+  IntColumn get packsPerBox => integer().nullable()();
 }
 
 // ---------------------------------------------------------------------------

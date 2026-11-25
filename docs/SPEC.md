@@ -199,6 +199,11 @@ product_sources    id PK, supplier_id FK, product_id FK NULL (NULL = name not in
 -- v9: editable inventory (§4.13)
 stock_movements    + note TEXT DEFAULT '' ("Damaged: 2 strips crushed")
 
+-- v16: box size per stockist (§4.7)
+receipt_lines      + packs_per_box INT NULL (strips per box on a Box line; NULL for other units
+                     and lines before v16). Index (product_id, receipt_id) WHERE packs_per_box
+                     IS NOT NULL.
+
 -- v15: B2B bills (§4.15)
 customers          + gstin TEXT NULL
 invoices           + buyer_gstin TEXT NULL, + place_of_supply TEXT NULL (state code; NULL = B2C)
@@ -406,11 +411,21 @@ Adding the same batch again increments qty, capped at the batch's qty (toast if 
   amount is prefilled as rate × qty − disc + GST, each step rounded to the paisa, and stays
   editable to match their bill (a difference is shown).
 - **Boxes → strips.** For a line in unit **Box** the line also asks *Strips per box* (packs per
-  box; "Packs per box" for non-tablets), prefilled from `products.packs_per_box`. Stock units
-  are prefilled as qty × strips per box (e.g. 10 Box × 15 = 150 strips) and stay editable; a
-  Box line can't be saved without it (1–500). Saving the receipt stores the number on the
-  medicine (same transaction) so the next Box receipt is prefilled. Other units are 1 pack
-  each. It can also be set or corrected in Add / Edit medicine (blank = ask on receipt).
+  box; "Packs per box" for non-tablets). Stock units are prefilled as qty × strips per box
+  (e.g. 10 Box × 15 = 150 strips) and stay editable; a Box line can't be saved without it
+  (1–500). Other units are 1 pack each.
+- **Box size per stockist (v16).** The same medicine can come 10 strips to a box from one
+  stockist and 20 from another. Each Box receipt line keeps the number used
+  (`receipt_lines.packs_per_box`), and saving also stores it on the medicine
+  (`products.packs_per_box`, same transaction). The field is prefilled, until the user types
+  one, with: (1) this stockist's latest Box line for the medicine (by received date, then
+  entry), else (2) the medicine's number, else blank (ask). It follows the stockist field as
+  it is typed. The medicine's number can also be set or corrected in Add / Edit medicine.
+- **Box size check.** A number that differs from this stockist's last one (or, with no history
+  with them, from the medicine's) shows a warning on the line ("Last box from X had 10 strips
+  — check the box"). It doesn't block: Save asks once, listing those lines, with *Check
+  again* / *Save anyway*, because a wrong number puts 2× or ½× the stock on the shelf. Lines
+  received before v16 have no box size, so the medicine's number is the fallback.
 - Saving a receipt is **one transaction**: upsert stockist, insert receipt + lines, add stock
   per §4.5 (movement `reason='receive'`, `ref_type='purchase'`, `ref_id`=receipt), update
   order-line statuses. Duplicate (stockist, invoice no) is rejected.

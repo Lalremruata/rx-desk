@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:rx_desk/core/money/paise.dart';
 import 'package:rx_desk/core/purchases/purchase_rules.dart';
+import 'package:rx_desk/core/utils/pack.dart';
 
 void main() {
   group('order-line status after a receipt (SPEC §4.7)', () {
@@ -80,6 +81,35 @@ void main() {
     expect(defaultStockPacks(qty: 10, unit: 'Strip', packsPerBox: 15), 10);
     expect(defaultStockPacks(qty: 3, unit: 'Bottle'), 3);
     expect(defaultStockPacks(qty: 0, unit: 'Box', packsPerBox: 15), isNull);
+  });
+
+  test('box size: this stockist first, then the medicine; warn on a different number', () {
+    const mehta = BoxSizeSeen(supplierId: 1, supplierName: 'Mehta Pharma', packsPerBox: 10, receivedDate: '2026-09-05');
+    const life = BoxSizeSeen(supplierId: 2, supplierName: 'Life Drugs Centre', packsPerBox: 20, receivedDate: '2026-09-03');
+    expect(boxSizeFrom(const [mehta, life], 2), same(life));
+    expect(boxSizeFrom(const [mehta, life], 3), isNull);
+    expect(boxSizeFrom(const [mehta, life], null), isNull);
+
+    expect(suggestedPacksPerBox(fromStockist: life, productDefault: 10), 20);
+    expect(suggestedPacksPerBox(productDefault: 10), 10);
+    expect(suggestedPacksPerBox(productDefault: 0), isNull);
+    expect(suggestedPacksPerBox(), isNull);
+
+    // Same as this stockist's last box: fine, even if the medicine says otherwise.
+    expect(boxSizeWarning(entered: 20, fromStockist: life, productDefault: 10), isNull);
+    final w = boxSizeWarning(entered: 10, fromStockist: life, productDefault: 10)!;
+    expect((w.entered, w.expected, w.stockist), (10, 20, 'Life Drugs Centre'));
+    expect(w.message(PackNouns.tablet), 'Last box from Life Drugs Centre had 20 strips — check the box');
+    // New stockist: compared with the medicine's own number.
+    final u = boxSizeWarning(entered: 20, productDefault: 10)!;
+    expect((u.expected, u.stockist), (10, null));
+    expect(u.message(PackNouns.other), 'Usually 10 packs per box — check the box');
+    expect(boxSizeWarning(entered: 10, productDefault: 10), isNull);
+    // Nothing to compare with, or not a valid size yet.
+    expect(boxSizeWarning(entered: 20), isNull);
+    expect(boxSizeWarning(entered: null, fromStockist: life), isNull);
+    expect(boxSizeWarning(entered: 0, fromStockist: life), isNull);
+    expect(boxSizeWarning(entered: maxPacksPerBox + 1, fromStockist: life), isNull);
   });
 
   test('purchase line amount: rate × qty − disc + GST, each step to the paisa', () {

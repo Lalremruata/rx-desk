@@ -589,8 +589,13 @@ class _DraftReceiveLine {
   String unit;
 
   /// Packs (strips) in one box — asked when [unit] is Box; prefilled from
-  /// the medicine and saved back on it with the receipt.
+  /// this stockist's last Box receipt, else the medicine (SPEC §4.7), and
+  /// saved back with the receipt.
   String packsPerBox = '';
+  bool packsPerBoxEdited = false;
+
+  /// This medicine's last Box receipt from the chosen stockist, if any.
+  BoxSizeSeen? lastFromStockist;
   String batch = '';
   String expiry = '';
 
@@ -612,6 +617,11 @@ class _DraftReceiveLine {
 
   bool get needsPacksPerBox => unitNeedsPacksPerBox(unit);
 
+  /// Differs from this stockist's last box size (or the medicine's).
+  BoxSizeWarning? get boxWarning => product == null || !needsPacksPerBox
+      ? null
+      : boxSizeWarning(entered: int.tryParse(packsPerBox), fromStockist: lastFromStockist, productDefault: product!.packsPerBox);
+
   int get paidQty => int.tryParse(qty) ?? 0;
   int get freeQty => int.tryParse(free) ?? 0;
 
@@ -625,12 +635,29 @@ class _DraftReceiveLine {
 
   /// Sets the medicine, taking its remembered strips per box, GST and MRP.
   void setProduct(StockRow? p) {
+    if (p?.id != product?.id) {
+      packsPerBoxEdited = false;
+      lastFromStockist = null;
+    }
     product = p;
-    if (p?.packsPerBox case final n?) packsPerBox = '$n';
+    if (!packsPerBoxEdited) packsPerBox = '${suggestedPacksPerBox(productDefault: p?.packsPerBox) ?? ''}';
     if (p != null) {
       gst = '${p.gstRate}';
       mrp = p.mrp.toInputString();
     }
+    recompute();
+  }
+
+  /// Follows the chosen stockist's box size (from [history]) until the user
+  /// types one. Idempotent, so the dialog can call it on every build.
+  void syncBoxSize(List<BoxSizeSeen>? history, int? supplierId) {
+    final p = product;
+    if (p == null || history == null) return;
+    lastFromStockist = boxSizeFrom(history, supplierId);
+    if (packsPerBoxEdited) return;
+    final next = '${suggestedPacksPerBox(fromStockist: lastFromStockist, productDefault: p.packsPerBox) ?? ''}';
+    if (next == packsPerBox) return;
+    packsPerBox = next;
     recompute();
   }
 
@@ -678,13 +705,17 @@ class _ReceiveInvoiceDialogState extends ConsumerState<ReceiveInvoiceDialog> {
     _loadProducts();
   }
 
-  int _creditDays(List<Supplier> suppliers) {
-    final n = supplier.trim().toLowerCase();
+  /// The stockist typed, if already known (case-insensitive).
+  Supplier? _supplierIn(List<Supplier> suppliers) {
+    final n = supplier.trim().replaceAll(RegExp(r'\s+'), ' ').toLowerCase();
+    if (n.isEmpty) return null;
     for (final s in suppliers) {
-      if (s.name.toLowerCase() == n) return s.creditDays;
+      if (s.name.toLowerCase() == n) return s;
     }
-    return 30;
+    return null;
   }
+
+  int _creditDays(List<Supplier> suppliers) => _supplierIn(suppliers)?.creditDays ?? 30;
 
   Paise? get _billTotal => billTotalEdited ? Paise.tryParse(billTotal) : _total;
 
@@ -760,6 +791,22 @@ class _ReceiveInvoiceDialogState extends ConsumerState<ReceiveInvoiceDialog> {
       ref.read(toastsProvider.notifier).show('Check the highlighted fields', warn: true);
       return;
     }
+    // A wrong box size puts 2× or ½× the stock on the shelf (SPEC §4.7).
+    final odd = [
+      for (final l in lines)
+        if (l.boxWarning case final w?) '${l.product!.name}: ${w.entered} per box (last time ${w.expected}${w.stockist == null ? '' : ' from ${w.stockist}'})',
+    ];
+    if (odd.isNotEmpty) {
+      final ok = await showConfirmDialog(
+        context,
+        title: odd.length == 1 ? 'Box size differs from last time' : 'Box sizes differ from last time',
+        message: '${odd.join('\n')}\n\nCount what one box holds — stock added is boxes × this number.',
+        confirmLabel: 'Save anyway',
+        cancelLabel: 'Check again',
+        icon: Icons.inventory_2_outlined,
+      );
+      if (!ok || !mounted) return;
+    }
     setState(() => saving = true);
     final paid = paidNow.trim().isEmpty ? null : Paise.tryParse(paidNow);
     try {
@@ -827,6 +874,10 @@ class _ReceiveInvoiceDialogState extends ConsumerState<ReceiveInvoiceDialog> {
           ].take(5).toList();
     final window = ref.watch(settingsProvider.select((x) => x.expiryWindowMonths));
     final now = ref.watch(nowProvider)();
+    final supplierId = _supplierIn(suppliers)?.id;
+    for (final l in lines) {
+      if (l.product case final p?) l.syncBoxSize(ref.watch(boxSizeHistoryProvider(p.id)).value, supplierId);
+    }
 
     return AppDialogPanel(
       semanticLabel: 'Receive invoice',
@@ -880,6 +931,7 @@ class _ReceiveInvoiceDialogState extends ConsumerState<ReceiveInvoiceDialog> {
             errors: errors,
             now: now,
             window: window,
+            supplierName: supplier.trim(),
             onChanged: () => setState(() {}),
             onRemove: () => setState(() => lines.remove(l)),
           ),
@@ -1075,6 +1127,7 @@ class _ReceiveLineCard extends ConsumerWidget {
     required this.errors,
     required this.now,
     required this.window,
+    required this.supplierName,
     required this.onChanged,
     required this.onRemove,
   });
@@ -1084,6 +1137,9 @@ class _ReceiveLineCard extends ConsumerWidget {
   final Map<String, String> errors;
   final DateTime now;
   final int window;
+
+  /// As typed in the dialog ('' when not yet).
+  final String supplierName;
   final VoidCallback onChanged;
   final VoidCallback onRemove;
 
@@ -1121,10 +1177,16 @@ class _ReceiveLineCard extends ConsumerWidget {
     final free = line.freeQty;
     final perBox = int.tryParse(line.packsPerBox) ?? 0;
     final qtyText = '${qtyLabel(boxQty, line.unit)}${free > 0 ? ' + $free free' : ''}';
+    final last = line.lastFromStockist;
+    final remembered = p != null && p.packsPerBox == perBox && (last == null || last.packsPerBox == perBox);
     final boxMaths = p == null || !line.needsPacksPerBox || boxQty < 1 || perBox < 1 || perBox > maxPacksPerBox
         ? null
         : '$qtyText × $perBox = ${formatCount((boxQty + free) * perBox)} ${nouns.packWord((boxQty + free) * perBox)}'
-              '${p.packsPerBox == perBox ? '' : ' · $perBox per box will be remembered for ${p.name}'}';
+              '${remembered ? '' : ' · $perBox per box will be remembered for ${p.name}${supplierName.isEmpty ? '' : ' from $supplierName'}'}';
+    final boxWarning = line.boxWarning;
+    final lastNote = boxWarning != null || last == null || !line.needsPacksPerBox
+        ? null
+        : '${last.supplierName}: ${last.packsPerBox} per box last time (${dayLabel(last.receivedDate)})';
     // Cost per strip, free goods included (SPEC §4.7).
     final packs = int.tryParse(line.stockUnits) ?? 0;
     final amt = Paise.tryParse(line.amount);
@@ -1250,6 +1312,7 @@ class _ReceiveLineCard extends ConsumerWidget {
                     inputFormatters: digits,
                     onChanged: (v) => _set(() {
                       line.packsPerBox = v;
+                      line.packsPerBoxEdited = true;
                       line.recompute();
                     }),
                   ),
@@ -1352,7 +1415,23 @@ class _ReceiveLineCard extends ConsumerWidget {
               spacing: AppSpace.lg,
               runSpacing: 4,
               children: [
+                if (boxWarning != null)
+                  Semantics(
+                    container: true,
+                    label: 'Warning: ${boxWarning.message(nouns)}',
+                    excludeSemantics: true,
+                    child: Row(
+                      key: ValueKey('recv-boxwarn-$index'),
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.warning_amber_rounded, size: 16, color: StatusTone.warning.colors.fg),
+                        const SizedBox(width: 4),
+                        Flexible(child: Text(boxWarning.message(nouns), style: AppType.smallStrong.copyWith(color: StatusTone.warning.colors.fg))),
+                      ],
+                    ),
+                  ),
                 if (boxMaths != null) Text(boxMaths, key: ValueKey('recv-boxmaths-$index'), style: AppType.smallStrong),
+                if (lastNote != null) Text(lastNote, key: ValueKey('recv-boxlast-$index'), style: AppType.caption),
                 if (perPack != null)
                   Text('${formatInr(perPack)} per ${nouns.pack}${free > 0 ? ' (free goods included)' : ''}',
                       key: ValueKey('recv-cost-$index'), style: AppType.caption),

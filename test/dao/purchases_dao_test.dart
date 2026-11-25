@@ -190,6 +190,43 @@ void main() {
     expect(await qtyOf(db, bid), 165);
   });
 
+  test('box size per stockist: kept on each Box line, latest per stockist (SPEC §4.7)', () async {
+    final (pid, bid) = await addMed(db, name: 'Dolo 650 Tablet', qty: 0);
+    final (other, _) = await addMed(db, name: 'Pan 40', batch: 'PN01', qty: 0);
+    Future<void> box(String supplier, String inv, String date, int perBox, {int pid0 = 0}) => dao.receive(
+          ReceiveRequest(
+            supplierName: supplier,
+            invoiceNo: inv,
+            receivedDate: date,
+            lines: [
+              ReceiveLineInput(productId: pid0 == 0 ? pid : pid0, batchNo: pid0 == 0 ? 'PCM2611' : 'PN01', qty: 2, unit: 'Box', stockUnits: 2 * perBox, amount: Paise.zero, packsPerBox: perBox),
+            ],
+          ),
+          at: t0,
+          now: t0,
+        );
+
+    expect(await dao.boxSizeHistory(pid), isEmpty);
+    await box('Mehta Pharma', 'A1', '2026-09-01', 10);
+    await box('Life Drugs Centre', 'B1', '2026-09-03', 20);
+    await box('Mehta Pharma', 'A2', '2026-09-05', 12);
+    await box('Mehta Pharma', 'A0', '2026-08-20', 15); // entered late, older invoice
+    await box('Mehta Pharma', 'P1', '2026-09-06', 30, pid0: other); // another medicine
+    // A Strip line has no box size and isn't history.
+    await receive([ReceiveLineInput(productId: pid, batchNo: 'PCM2611', qty: 5, unit: 'Strip', stockUnits: 5, amount: Paise.zero, packsPerBox: 99)], inv: 'S1');
+
+    final h = await dao.boxSizeHistory(pid);
+    expect(h.map((x) => (x.supplierName, x.packsPerBox, x.receivedDate)), [
+      ('Mehta Pharma', 12, '2026-09-05'),
+      ('Life Drugs Centre', 20, '2026-09-03'),
+    ]);
+    final lines = await (db.select(db.receiptLines)..where((l) => l.productId.equals(pid))).get();
+    expect(lines.map((l) => (l.unit, l.packsPerBox)), containsAll([('Box', 10), ('Box', 20), ('Strip', null)]));
+    // Stock is what was typed; the medicine keeps the last number saved.
+    expect(await qtyOf(db, bid), 20 + 40 + 24 + 30 + 5);
+    expect((await db.catalogDao.stockRow(pid, now: t0))!.packsPerBox, 15);
+  });
+
   test('a bad later line rolls back a remembered strips per box', () async {
     final (pid, _) = await addMed(db, qty: 0);
     await expectLater(

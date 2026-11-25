@@ -7,6 +7,7 @@ import '../../../core/db/daos/purchases_dao.dart';
 import '../../../core/db/daos/sources_dao.dart';
 import '../../../core/db/db_provider.dart';
 import '../../../core/money/paise.dart';
+import '../../../core/purchases/purchase_rules.dart';
 import '../../../core/utils/expiry.dart';
 
 part 'purchases_repository.g.dart';
@@ -49,6 +50,7 @@ class PurchasesRepository {
       _dao.receiptPage(before: before, search: search, limit: limit);
 
   Future<List<ReceiptLine>> linesOf(int receiptId) => _dao.linesOf(receiptId);
+  Future<List<BoxSizeSeen>> boxSizeHistory(int productId) => _dao.boxSizeHistory(productId);
 
   Future<PurchaseKpis> kpis() => _dao.kpis(now: _now());
 

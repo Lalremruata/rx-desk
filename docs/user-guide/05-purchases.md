@@ -125,9 +125,16 @@ the stock for you.
    *"10 Box × 15 = 150 strips"*.
 4. Fill in the batch, expiry and amount as usual, and save.
 
-- **RxDesk remembers it.** The number is saved on the medicine with the receipt. The next time
-  that medicine arrives in boxes, **Strips per box** is already filled in, and the line says
-  when a number you type will replace the remembered one.
+- **RxDesk remembers it, for each stockist.** A box can hold 10 strips from one stockist and 20
+  from another. The next time that medicine arrives in boxes, **Strips per box** is filled in
+  with what *this* stockist sent last time. Type the stockist first, and the number follows it.
+  The line shows, for example, *"Mehta Pharma: 10 per box last time (Sun 1 Nov 26)"*. For a
+  stockist you haven't had boxes from yet, the medicine's last number is used.
+- **A different number is flagged.** If the number you type differs from last time, the line
+  warns *"Last box from Mehta Pharma had 10 strips — check the box"*. When you save, RxDesk
+  asks once: **Check again** goes back to the receipt, and **Save anyway** keeps the new number
+  (for example when the company changed its pack). This matters because a wrong number puts
+  double or half the stock on the shelf.
 - A Box line can't be saved without strips per box (*"How many strips in a box?"*). It must be
   1–500.
 - **Add to stock** can still be changed by hand, for example if a box came short.

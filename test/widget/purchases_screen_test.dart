@@ -212,6 +212,75 @@ void main() {
     expect((field('recv-perbox-0'), field('recv-units-0')), ('15', '30'));
   });
 
+  testWidgets('box size follows the stockist; a different one warns and asks before saving', (tester) async {
+    Future<void> boxIn(AppDatabase db, String supplier, String inv, String date, int perBox) => db.purchasesDao.receive(
+          ReceiveRequest(
+            supplierName: supplier,
+            invoiceNo: inv,
+            receivedDate: date,
+            lines: [ReceiveLineInput(productId: 1, batchNo: 'PCM2611', qty: 1, unit: 'Box', stockUnits: perBox, amount: Paise.zero, packsPerBox: perBox)],
+          ),
+          at: t0,
+          now: t0,
+        );
+    final c = await pumpApp(
+      tester,
+      location: '/purchases',
+      setUpDb: (db) async {
+        await _seed(db);
+        await boxIn(db, 'Mehta Pharma', 'M1', '2026-11-01', 10);
+        await boxIn(db, 'Life Drugs Centre', 'L1', '2026-11-05', 20); // the medicine now says 20
+        await db.purchasesDao.addOrderLines('2026-11-09', [const NewOrderLine(productId: 1, itemName: '', qty: 3, unit: 'Box')], at: t0);
+      },
+    );
+    final db = c.read(appDatabaseProvider);
+    String field(String key) => tester.widget<TextField>(find.byKey(ValueKey(key))).controller!.text;
+    await _run(tester);
+    await tester.ensureVisible(find.byKey(const ValueKey('receive-line-1')));
+    await _run(tester, 100);
+    await tester.tap(find.byKey(const ValueKey('receive-line-1')));
+    await _run(tester);
+
+    // No stockist yet: the medicine's own number.
+    expect((field('recv-perbox-0'), field('recv-units-0')), ('20', '60'));
+    await _type(tester, 'recv-supplier', 'mehta pharma');
+    await _run(tester, 100);
+    expect((field('recv-perbox-0'), field('recv-units-0')), ('10', '30'));
+    expect(find.text('Mehta Pharma: 10 per box last time (Sun 1 Nov 26)'), findsOneWidget);
+    expect(find.byKey(const ValueKey('recv-boxwarn-0')), findsNothing);
+    await _type(tester, 'recv-supplier', 'Life Drugs Centre');
+    await _run(tester, 100);
+    expect(field('recv-perbox-0'), '20');
+
+    // Back to Mehta, but this box holds 20.
+    await _type(tester, 'recv-supplier', 'Mehta Pharma');
+    await _run(tester, 100);
+    await _type(tester, 'recv-perbox-0', '20');
+    expect(field('recv-units-0'), '60');
+    expect(find.text('Last box from Mehta Pharma had 10 strips — check the box'), findsOneWidget);
+    await _type(tester, 'recv-invoice', 'M2');
+    await _type(tester, 'recv-batch-0', 'PCM2611');
+
+    await tester.ensureVisible(find.byKey(const ValueKey('recv-save-invoice')));
+    await tester.tap(find.byKey(const ValueKey('recv-save-invoice')));
+    await _run(tester);
+    expect(find.text('Box size differs from last time'), findsOneWidget);
+    await tester.tap(find.text('Check again'));
+    await _run(tester);
+    expect(find.byKey(const ValueKey('recv-save-invoice')), findsOneWidget);
+    expect(await tester.runAsync(() => db.purchasesDao.boxSizeHistory(1)), hasLength(2));
+
+    await tester.ensureVisible(find.byKey(const ValueKey('recv-save-invoice')));
+    await tester.tap(find.byKey(const ValueKey('recv-save-invoice')));
+    await _run(tester);
+    await tester.tap(find.text('Save anyway'));
+    await _run(tester);
+    expect(_toasts(c).last, startsWith('Invoice M2 saved'));
+    final h = (await tester.runAsync(() => db.purchasesDao.boxSizeHistory(1)))!;
+    expect(h.map((x) => (x.supplierName, x.packsPerBox)), [('Mehta Pharma', 20), ('Life Drugs Centre', 20)]);
+    expect((await tester.runAsync(() => db.catalogDao.stockRow(1, now: t0)))!.saleable, 100 + 10 + 20 + 60);
+  });
+
   testWidgets('receive with rate details: amount from rate, free goods in stock, a new batch MRP is saved', (tester) async {
     final c = await pumpApp(
       tester,
