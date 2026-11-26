@@ -124,7 +124,8 @@ back from **Inventory › Hidden**.
 
 **Stock arrived in boxes. How many strips is that?**
 On the receipt line, choose **Box** and type **Strips per box**. RxDesk multiplies it out and
-remembers the number for that medicine (see
+remembers the number for that medicine *and that stockist*, so next time it is filled in for
+you. If you type a different number from last time, RxDesk warns you and asks before saving (see
 [Receiving in boxes](05-purchases.md#receiving-in-boxes-strips-per-box)).
 
 **The cash in the drawer doesn't match.**
@@ -172,7 +173,7 @@ GSTINs from your own state are accepted; RxDesk doesn't make inter-state (IGST) 
 | **Closed short** | An order line where the stockist won't send the rest |
 | **Damdawi lak na** | "Where to get medicines": your stockist directory sheet |
 | **MR** | Medical Representative of a pharmaceutical company |
-| **Strips per box** | How many strips (or packs) come in one stockist box. Used when receiving in boxes. |
+| **Strips per box** | How many strips (or packs) come in one stockist box. Used when receiving in boxes; remembered for each stockist, since box sizes can differ between them. |
 | **Paid-out** | Cash taken from the drawer for a shop expense, recorded in Day close |
 | **Handed over** | Cash taken out of the drawer after counting (to the bank or the Owner) |
 | **Reorder level** | When stock falls to this many packs, the medicine shows as low |

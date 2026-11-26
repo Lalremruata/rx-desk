@@ -26,14 +26,14 @@ Cashiers).
 ## Contents
 
 1. [Getting started](01-getting-started.md): installing on Windows, first launch, PIN login, the screen layout, first-day setup, keyboard shortcuts
-2. [Billing](02-billing.md): searching, batches, loose tablets, discounts (chips, custom % or ₹), prescriptions, payment, credit bills, saving and printing
+2. [Billing](02-billing.md): searching, batches, loose tablets, batch-wise MRP, discounts (chips, custom % or ₹), prescriptions, payment, credit bills, holding a bill (`F6`), B2B bills with the buyer's GSTIN, saving and printing
 3. [Dashboard](03-dashboard.md): today's numbers, sales charts, what needs attention
 4. [Inventory](04-inventory.md): stock by batch and expiry, adding, editing and hiding medicines, correcting batches, receiving stock, loose selling
-5. [Purchases](05-purchases.md): order book, receiving stockist invoices (including boxes → strips), stockist dues and payments, the stockist directory
+5. [Purchases](05-purchases.md): order book, receiving stockist invoices (free goods, rate / discount / GST, batch MRP, boxes → strips per stockist), stockist dues and payments, the stockist directory
 6. [Invoices and returns](06-invoices-and-returns.md): finding and reprinting bills, cancelling, sales returns and credit notes
 7. [Customers and credit](07-customers-and-credit.md): udhaar, customer dues, payments and statements
 8. [Day close](08-day-close.md): the cash that should be in the drawer, paid-outs, counting and closing the day
-9. [Reports](09-reports.md): the Sales register, GST and Schedule H registers, the Inventory Management Register
+9. [Reports](09-reports.md): the Sales register, GST and Schedule H registers, GSTR-1 export, the Inventory Management Register
 10. [Backup and restore](10-backup-and-restore.md): keeping your data safe
 11. [Settings](11-settings.md): every setting explained
 12. [Staff and permissions](12-staff-and-permissions.md): staff accounts, PINs, roles

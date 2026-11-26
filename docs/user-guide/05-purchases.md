@@ -128,10 +128,16 @@ the stock for you.
 - **RxDesk remembers it, for each stockist.** A box can hold 10 strips from one stockist and 20
   from another. The next time that medicine arrives in boxes, **Strips per box** is filled in
   with what *this* stockist sent last time. Type the stockist first, and the number follows it.
-  The line shows, for example, *"Mehta Pharma: 10 per box last time (Sun 1 Nov 26)"*. For a
-  stockist you haven't had boxes from yet, the medicine's last number is used.
+  The line shows, for example, *"Life Drugs Centre: 10 per box last time (Wed 28 Oct 26)"*. For
+  a stockist you haven't had boxes from yet, the medicine's own number (from **Edit medicine**)
+  is used.
+- **A new number is remembered.** When you type a number that isn't on record yet, the line
+  says so, for example *"… · 15 per box will be remembered for Dolo 650 Tablet from Life Drugs
+  Centre"*.
 - **A different number is flagged.** If the number you type differs from last time, the line
-  warns *"Last box from Mehta Pharma had 10 strips — check the box"*. When you save, RxDesk
+  warns *"Last box from Life Drugs Centre had 10 strips — check the box"*. If this stockist has
+  never sent you boxes, it compares with the medicine's own number instead: *"Usually 10 strips
+  per box — check the box"*. When you save, RxDesk
   asks once: **Check again** goes back to the receipt, and **Save anyway** keeps the new number
   (for example when the company changed its pack). This matters because a wrong number puts
   double or half the stock on the shelf.
@@ -141,7 +147,7 @@ the stock for you.
 - You can also set or correct the number in **Inventory › Edit medicine › Strips per box**.
 - For loose-sold medicines, stock is still typed in strips. RxDesk converts it to tablets itself.
 
-![Receiving 10 Box + 1 free of a free-text order line: strips per box, rate, discount, GST and the batch MRP](images/05-receive-box.png)
+![Receiving 10 Box + 1 free of a free-text order line: 15 strips per box, which this stockist's last box (10) flags; rate, discount, GST and the batch MRP](images/05-receive-box.png)
 
 Things to know:
 

@@ -88,7 +88,9 @@ Click a row (or **Show batches**) to open it. You'll see:
    - **Strips per box** (**Packs per box** for syrups and other non-tablets): how many strips
      come in one box from the stockist. Optional. RxDesk uses it when you receive this medicine
      in boxes (see [Purchases › Receive](05-purchases.md#receiving-in-boxes-strips-per-box)).
-     Leave it blank if you don't know yet; RxDesk will ask the first time a box arrives.
+     Leave it blank if you don't know yet; RxDesk will ask the first time a box arrives. If
+     different stockists send different box sizes, RxDesk remembers each stockist's number when
+     you receive, so this one is only the starting point.
 
    Under the form, a line puts the pack numbers together so you can check them at a glance,
    for example *"1 box = 20 strips = 200 tabs · MRP ₹30.90 per strip"*. Each pack field also has

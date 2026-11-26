@@ -217,6 +217,15 @@ Future<void> _extras(AppDatabase db) async {
   await db.sourcesDao.setStockistContact(ldc, phone: '9436154321');
   await db.sourcesDao.add(supplierName: 'Life Drugs Centre', productId: dolo, mrName: 'Lalrinfela', mrPhone: '9612233445', at: oct);
   await db.sourcesDao.add(supplierName: 'Mizo Pharma Agencies', itemName: 'Mycospor Cream', note: 'Cash only', at: oct);
+  // Dolo came 10 strips to a box from this stockist last time, so the
+  // 05-receive-box shot (15 per box) shows the box-size warning (SPEC §4.7).
+  await pd.receive(
+    ReceiveRequest(supplierName: 'Life Drugs Centre', invoiceNo: 'LDC/2610/131', receivedDate: '2026-10-28', lines: [
+      ReceiveLineInput(productId: dolo, batchNo: 'DOBS2910', expiry: '2028-03', qty: 4, unit: 'Box', stockUnits: 40, amount: const Paise(112000), packsPerBox: 10),
+    ]),
+    at: DateTime(2026, 10, 28, 12),
+    now: DateTime(2026, 10, 28, 12),
+  );
 
   // This week's orders: catalogue and free-text lines.
   final nov = DateTime(2026, 11, 7, 10);
@@ -408,7 +417,7 @@ void main() {
   });
 
   testWidgets('04-add-medicine', (tester) async {
-    await _open(tester, '/inventory', size: const Size(1280, 1000));
+    await _open(tester, '/inventory', size: const Size(1280, 1120));
     await _tap(tester, find.byKey(const ValueKey('add-medicine')));
     for (final (k, v) in [
       ('add-name', 'Calpol 500 Tablet'),
