@@ -102,6 +102,18 @@ void main() {
 
     Future<void> type(String key, String v) =>
         tester.enterText(find.descendant(of: find.byKey(ValueKey('add-$key')), matching: find.byType(TextField)), v);
+    // The pack fields explain themselves, and read as one picture.
+    expect(find.text('How it’s sold and priced. The MRP is for one of these.'), findsOneWidget);
+    expect(find.text('More than 1 lets you sell single tablets. 1 = whole strips only.'), findsOneWidget);
+    expect(find.text('For receiving stockist boxes. Blank = ask then; each stockist’s is remembered.'), findsOneWidget);
+    expect(find.byKey(const ValueKey('add-pack-summary')), findsNothing);
+    await type('pack', 'Strip of 10');
+    await type('perbox', '20');
+    await type('mrp', '30.90');
+    await tester.pump();
+    expect(tester.widget<Text>(find.byKey(const ValueKey('add-pack-summary'))).data, '1 box = 20 strips = 200 tabs · MRP ₹30.90 per strip');
+    await type('perbox', '');
+
     await type('name', 'Levocetirizine 5 mg Tablet');
     await type('maker', 'Lumina Remedies');
     await type('batch', 'LEV100');

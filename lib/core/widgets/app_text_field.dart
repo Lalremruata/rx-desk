@@ -115,6 +115,7 @@ class _AppTextFieldState extends State<AppTextField> {
         errorText: widget.error,
         errorMaxLines: 2,
         helperText: widget.helper,
+        helperMaxLines: 2,
         prefixIcon: widget.prefixIcon == null ? null : Icon(widget.prefixIcon, size: 18, color: AppColors.textMuted),
         enabledBorder: border(widget.borderColor),
         constraints: widget.height == null ? null : BoxConstraints(minHeight: widget.height!),

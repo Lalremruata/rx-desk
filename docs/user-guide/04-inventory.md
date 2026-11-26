@@ -89,6 +89,10 @@ Click a row (or **Show batches**) to open it. You'll see:
      come in one box from the stockist. Optional. RxDesk uses it when you receive this medicine
      in boxes (see [Purchases › Receive](05-purchases.md#receiving-in-boxes-strips-per-box)).
      Leave it blank if you don't know yet; RxDesk will ask the first time a box arrives.
+
+   Under the form, a line puts the pack numbers together so you can check them at a glance,
+   for example *"1 box = 20 strips = 200 tabs · MRP ₹30.90 per strip"*. Each pack field also has
+   a short note under it explaining what it is for.
 3. Press **Save medicine**.
 
 ![The Add medicine form](images/04-add-medicine.png)

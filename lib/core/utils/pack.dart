@@ -36,6 +36,18 @@ class PackNouns {
       };
 }
 
+/// "1 box = 20 strips = 200 tabs" — the Add medicine form's pack fields
+/// read as one picture. Null when there is nothing to explain (sold whole,
+/// box size not known).
+String? packSummary(PackNouns n, {required int packSize, int? packsPerBox}) {
+  final loose = packSize > 1;
+  final box = packsPerBox != null && packsPerBox >= 1;
+  if (box && loose) return '1 box = $packsPerBox ${n.packWord(packsPerBox)} = ${packsPerBox * packSize} ${n.units}';
+  if (box) return '1 box = $packsPerBox ${n.packWord(packsPerBox)}';
+  if (loose) return '1 ${n.pack} = $packSize ${n.units}, sold by the ${n.pack} or the ${n.unit}';
+  return null;
+}
+
 /// Largest pack size accepted.
 const int maxPackSize = 1000;
 

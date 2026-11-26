@@ -258,14 +258,21 @@ class _AddMedicineDialogState extends ConsumerState<AddMedicineDialog> {
     final priceChanged = e != null && (Paise.tryParse(mrp) != e.mrp || gst != e.gstRate || hsn.trim() != e.hsn);
     final newMrp = Paise.tryParse(mrp);
     final mrpChanged = e != null && newMrp != null && newMrp.value > 0 && newMrp != e.mrp;
+    // The three pack fields are easy to mix up: say what each is for.
+    final nouns = PackNouns.of(category);
+    final unitsWord = nouns.sizeLabel.split(' ').first.toLowerCase(); // tablets / capsules / units
+    final shownSize = e?.packSize ?? _size;
+    final summary = packSummary(nouns, packSize: shownSize, packsPerBox: _perBox);
+    final summaryMrp = Paise.tryParse(mrp);
     final atOldMrp = !mrpChanged ? 0 : (ref.watch(productBatchesProvider(e.id)).value ?? const <StockBatch>[]).where((b) => b.mrpPaise == e.mrp.value).length;
     Widget f(String key, String label, String hint, String value, ValueChanged<String> set,
-            {List<TextInputFormatter>? fmt, TextInputType? kb, bool autofocus = false, FocusNode? focus}) =>
+            {List<TextInputFormatter>? fmt, TextInputType? kb, bool autofocus = false, FocusNode? focus, String? helper}) =>
         AppTextField(
           key: ValueKey('add-$key'),
           focusNode: focus,
           label: label,
           hint: hint,
+          helper: helper,
           value: value,
           error: errors[key],
           autofocus: autofocus,
@@ -288,10 +295,10 @@ class _AddMedicineDialogState extends ConsumerState<AddMedicineDialog> {
             FieldSpan(child: f('name', 'Medicine name', 'e.g. Paracetamol 500 mg Tablet', name, (v) => name = v, autofocus: true, focus: _nameFocus)),
             f('salt', 'Salt / composition', 'Paracetamol 500 mg', salt, (v) => salt = v),
             f('maker', 'Manufacturer', 'Maker name', maker, (v) => maker = v),
-            f('pack', 'Pack', 'Strip of 10', pack, (v) {
+            f('pack', 'Pack', 'e.g. Strip of 10, Bottle 100 ml', pack, (v) {
               pack = v;
               _suggestSize();
-            }),
+            }, helper: 'How it’s sold and priced. The MRP is for one of these.'),
             AppDropdown<String>(
               label: 'Category',
               labelAbove: true,
@@ -305,8 +312,9 @@ class _AddMedicineDialogState extends ConsumerState<AddMedicineDialog> {
             if (!_editing)
               AppTextField(
                 key: const ValueKey('add-size'),
-                label: PackNouns.of(category).sizeLabel,
-                hint: '1 = sold whole only',
+                label: nouns.sizeLabel,
+                hint: 'e.g. 10',
+                helper: 'More than 1 lets you sell single $unitsWord. 1 = whole ${nouns.packs} only.',
                 value: size,
                 error: errors['size'],
                 keyboardType: TextInputType.number,
@@ -342,10 +350,18 @@ class _AddMedicineDialogState extends ConsumerState<AddMedicineDialog> {
             ),
             f('hsn', 'HSN code', '3004', hsn, (v) => hsn = v, fmt: digits, kb: TextInputType.number),
             f('rack', 'Rack / shelf', 'A1', rack, (v) => rack = v),
-            f('perbox', PackNouns.of(category).perBoxLabel, 'Default — each stockist’s is remembered', perBox, (v) => perBox = v,
-                fmt: digits, kb: TextInputType.number),
+            f('perbox', nouns.perBoxLabel, 'e.g. 20', perBox, (v) => perBox = v,
+                fmt: digits,
+                kb: TextInputType.number,
+                helper: 'For receiving stockist boxes. Blank = ask then; each stockist’s is remembered.'),
           ],
         ),
+        if (summary != null)
+          Text(
+            '$summary${summaryMrp == null || summaryMrp.value <= 0 ? '' : ' · MRP ${formatInr(summaryMrp)} per ${nouns.pack}'}',
+            key: const ValueKey('add-pack-summary'),
+            style: AppType.smallStrong,
+          ),
         if (atOldMrp > 0)
           ToggleRow(
             key: const ValueKey('edit-medicine-reprice'),

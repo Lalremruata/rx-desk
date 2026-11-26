@@ -4,6 +4,15 @@ import 'package:rx_desk/core/money/paise.dart';
 import 'package:rx_desk/core/utils/pack.dart';
 
 void main() {
+  test('pack summary: box, strip and tablets as one picture', () {
+    expect(packSummary(PackNouns.tablet, packSize: 10, packsPerBox: 20), '1 box = 20 strips = 200 tabs');
+    expect(packSummary(PackNouns.tablet, packSize: 1, packsPerBox: 1), '1 box = 1 strip');
+    expect(packSummary(PackNouns.other, packSize: 1, packsPerBox: 12), '1 box = 12 packs');
+    expect(packSummary(PackNouns.capsule, packSize: 15), '1 strip = 15 caps, sold by the strip or the cap');
+    expect(packSummary(PackNouns.tablet, packSize: 1), isNull);
+    expect(packSummary(PackNouns.tablet, packSize: 1, packsPerBox: 0), isNull);
+  });
+
   group('formatting (SPEC §4.9)', () {
     test('packs and loose units', () {
       expect(formatPackQty(124, 10, 'Tablet'), '12 strips + 4 tabs');
